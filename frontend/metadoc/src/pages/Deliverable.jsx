@@ -84,6 +84,7 @@ const Deliverable = () => {
 
   // Restore files view immediately when navigating back from a submission detail
   const initialDeadlineData = location.state?.selectedDeadlineData || null;
+  const initialActiveOnly = !!location.state?.activeOnly;
 
   // View State: 'folders' | 'files'
   const [viewMode, setViewMode] = useState(initialDeadlineData ? 'files' : 'folders');
@@ -108,6 +109,7 @@ const Deliverable = () => {
   });
   const [sortOption, setSortOption] = useState('none'); // 'none', 'newest', 'oldest', 'a_z'
   const [teamCodeFilter, setTeamCodeFilter] = useState('none');
+  const [showActiveOnly] = useState(initialActiveOnly);
 
   // Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -163,7 +165,7 @@ const Deliverable = () => {
   // When coming back from SubmissionDetail, selectedDeadlineData was already consumed
   // by the useState initializer above — clear it from route state to prevent stale nav
   useEffect(() => {
-    if (location.state?.selectedDeadlineData) {
+    if (location.state?.selectedDeadlineData || location.state?.activeOnly) {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -173,7 +175,7 @@ const Deliverable = () => {
     if (viewMode === 'files' && selectedDeadline) {
       fetchSubmissions();
     }
-  }, [viewMode, pagination.page, selectedDeadline, sortOption, teamCodeFilter]);
+  }, [viewMode, pagination.page, selectedDeadline, sortOption, teamCodeFilter, searchTerm]);
 
   const fetchDeadlines = async () => {
     try {
@@ -221,7 +223,7 @@ const Deliverable = () => {
       }
 
       if (searchTerm) {
-        params.student_id = searchTerm;
+        params.search = searchTerm;
       }
 
       if (teamCodeFilter !== 'none') {
@@ -250,7 +252,7 @@ const Deliverable = () => {
       const response = await dashboardAPI.getDeadlineStudents();
       setStudents(response.data.students || []);
     } catch (err) {
-      console.error('Failed to fetch class record students:', err);
+      console.error('Failed to fetch class list students:', err);
       setStudents([]);
     }
   };
@@ -337,8 +339,6 @@ const Deliverable = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPagination({ ...pagination, page: 1 });
-    fetchSubmissions();
   };
 
   const handleConfirmDelete = async () => {
@@ -487,16 +487,19 @@ const Deliverable = () => {
   // --- RENDER ---
 
   const renderFolders = () => {
-    const filteredDeadlines = deadlines.filter(deadline =>
-      deadline.title.toLowerCase().includes(folderSearchTerm.toLowerCase())
-    );
+    const now = new Date();
+    const filteredDeadlines = deadlines.filter((deadline) => {
+      const matchesSearch = deadline.title.toLowerCase().includes(folderSearchTerm.toLowerCase());
+      const isActiveDeadline = new Date(deadline.deadline_datetime) >= now;
+      return matchesSearch && (!showActiveOnly || isActiveDeadline);
+    });
 
     return (
       <div className="folders-section">
         <div className="submissions-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xl)' }}>
           <div>
             <h1>Deliverable Management</h1>
-            <p>Select a Folder to view student submissions</p>
+            <p>{showActiveOnly ? 'Showing active deliverables only' : 'Select a Folder to view student submissions'}</p>
           </div>
           <button
             type="button"
@@ -588,22 +591,11 @@ const Deliverable = () => {
                           </p>
                           {deadline.description.length > 50 && (
                             <button
-                              className="btn-see-more"
+                              className="btn-see-more btn-see-more-description"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedDescription({ title: deadline.title, content: deadline.description });
                                 setShowDescriptionModal(true);
-                              }}
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#be123c',
-                                padding: '4px 0',
-                                fontSize: '0.8rem',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                textDecoration: 'none',
-                                display: 'inline-block'
                               }}
                             >
                               See More
@@ -644,42 +636,28 @@ const Deliverable = () => {
         </button>
         <div className="folder-info">
           <h2>{selectedDeadline?.title}</h2>
-          <p>
-            Due: {new Date(selectedDeadline?.deadline_datetime).toLocaleString()}
-            {selectedDeadline?.description && (
-              <>
-                <br />
-                <span className="text-gray-600 line-clamp-1">
-                  {selectedDeadline.description.length > 100 
-                    ? selectedDeadline.description.substring(0, 100) + '...'
-                    : selectedDeadline.description}
-                </span>
-                {selectedDeadline.description.length > 100 && (
-                  <button
-                    className="btn-see-more"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDescription({ title: selectedDeadline.title, content: selectedDeadline.description });
-                      setShowDescriptionModal(true);
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#be123c',
-                      padding: '0 4px',
-                      fontSize: '0.85rem',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      textDecoration: 'none',
-                      display: 'inline-block'
-                    }}
-                  >
-                    See More
-                  </button>
-                )}
-              </>
-            )}
-          </p>
+          <p>Due: {new Date(selectedDeadline?.deadline_datetime).toLocaleString()}</p>
+          {selectedDeadline?.description && (
+            <div className={`folder-info-description ${selectedDeadline.description.length > 15 ? 'is-long' : ''}`}>
+              <span className="text-gray-600">
+                {selectedDeadline.description.length > 15
+                  ? `${selectedDeadline.description.substring(0, 15)}...`
+                  : selectedDeadline.description}
+              </span>
+              {selectedDeadline.description.length > 15 && (
+                <button
+                  className="btn-see-more btn-see-more-inline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedDescription({ title: selectedDeadline.title, content: selectedDeadline.description });
+                    setShowDescriptionModal(true);
+                  }}
+                >
+                  See More
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -691,9 +669,12 @@ const Deliverable = () => {
             <input
               type="text"
               className="search-input"
-              placeholder="Search student ID..."
+              placeholder="Search student ID, student name, or team code..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
             />
           </div>
         </form>
@@ -719,7 +700,7 @@ const Deliverable = () => {
               setPagination({ ...pagination, page: 1 });
             }}
           >
-            <option value="none">NONE</option>
+            <option value="none">Sort By</option>
             <option value="newest">Newest Date</option>
             <option value="oldest">Oldest Date</option>
             <option value="a_z">Name (A-Z)</option>
@@ -1138,19 +1119,19 @@ const Deliverable = () => {
       {/* Description Modal */}
       {showDescriptionModal && (
         <div className="modal-overlay" onClick={() => setShowDescriptionModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '600px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 style={{ fontSize: '1.25rem', color: '#800020', margin: 0 }}>{selectedDescription.title}</h2>
+          <div className="modal-content deliverable-description-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header deliverable-description-header">
+              <h2 className="deliverable-description-title">{selectedDescription.title}</h2>
               <button className="btn-close" onClick={() => setShowDescriptionModal(false)}>
                 <X size={24} />
               </button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', padding: '1.5rem' }}>
-              <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', color: '#374151', fontSize: '0.95rem', margin: 0 }}>
+            <div className="modal-body deliverable-description-body">
+              <p className="deliverable-description-content">
                 {selectedDescription.content}
               </p>
             </div>
-            <div className="modal-footer" style={{ borderTop: '1px solid #e5e7eb', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="modal-footer deliverable-description-footer">
               <button className="btn btn-primary" onClick={() => setShowDescriptionModal(false)}>
                 Close
               </button>

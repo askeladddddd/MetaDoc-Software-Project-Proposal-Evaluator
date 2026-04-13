@@ -8,7 +8,10 @@ Implements SRS requirements:
 - Report viewing and filtering
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import json
+import shutil
+import time
 from flask import Blueprint, request, jsonify, current_app, send_file
 
 from sqlalchemy import desc, asc, and_, or_
@@ -18,7 +21,7 @@ import os
 from app.core.extensions import db
 from app.models import (
     Submission, AnalysisResult, Deadline, User, DocumentSnapshot, AuditLog,
-    SubmissionStatus, TimelinessClassification, UserRole
+    SubmissionStatus, TimelinessClassification, UserRole, Student
 )
 from app.services.audit_service import AuditService
 from app.services import DashboardService, DriveService, SubmissionService
@@ -42,6 +45,154 @@ def get_dashboard_service():
 
 # Lazy initialize
 dashboard_service = get_dashboard_service()
+
+# Lightweight in-process cache to prevent repeated AI generation bursts.
+_contribution_report_cache = {}
+
+
+def _parse_iso_datetime(value):
+    """Parse ISO timestamp strings from Google APIs safely."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+
+def _to_naive_utc(dt):
+    """Normalize datetime values to naive UTC for safe comparisons."""
+    if not dt:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _extract_drive_credentials_from_request():
+    """Build user OAuth credentials payload when available for Drive access."""
+    session_obj = getattr(request, 'current_session', None)
+    if not session_obj or not session_obj.google_access_token:
+        return None
+
+    try:
+        creds_dict = {
+            "token": session_obj.google_access_token,
+            "refresh_token": session_obj.google_refresh_token,
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "client_id": current_app.config.get('GOOGLE_CLIENT_ID'),
+            "client_secret": current_app.config.get('GOOGLE_CLIENT_SECRET'),
+            "scopes": ['https://www.googleapis.com/auth/drive.readonly']
+        }
+        return json.dumps(creds_dict)
+    except Exception as err:
+        current_app.logger.warning(f"Failed to serialize Drive credentials: {err}")
+        return None
+
+
+def _refresh_drive_submission_analysis(submission, force_refresh=False):
+    """Refresh stored metadata/content stats for Drive submissions when doc changed."""
+    if not submission or not submission.google_drive_link:
+        return False, None
+
+    submission_service = SubmissionService()
+    file_id, validation_error = submission_service.validate_drive_link(submission.google_drive_link)
+    if validation_error:
+        return False, validation_error
+
+    drive_service = DriveService()
+    user_creds_json = _extract_drive_credentials_from_request()
+
+    drive_meta, meta_error = drive_service.get_file_metadata(file_id, user_credentials_json=user_creds_json)
+    if meta_error or not drive_meta:
+        error_message = meta_error.get('message') if isinstance(meta_error, dict) else meta_error
+        return False, error_message or "Unable to fetch latest Drive metadata"
+
+    remote_modified = _to_naive_utc(_parse_iso_datetime(drive_meta.get('modifiedTime')))
+    local_processed = _to_naive_utc(submission.processing_completed_at)
+    has_stats = (
+        submission.analysis_result is not None and
+        bool(submission.analysis_result.content_statistics)
+    )
+
+    if (
+        not force_refresh and
+        has_stats and
+        remote_modified and
+        local_processed and
+        remote_modified <= local_processed
+    ):
+        return False, None
+
+    filename = f"refresh_{submission.id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.docx"
+    temp_path, download_error = drive_service.download_file(
+        file_id,
+        filename,
+        mime_type=drive_meta.get('mimeType'),
+        user_credentials_json=user_creds_json
+    )
+    if download_error or not temp_path or not os.path.exists(temp_path):
+        return False, download_error or "Unable to download latest Drive document"
+
+    from app.services.metadata_service import MetadataService
+    metadata_service = MetadataService()
+
+    metadata, metadata_error = metadata_service.extract_docx_metadata(
+        temp_path,
+        external_metadata=drive_meta
+    )
+    if metadata_error:
+        return False, metadata_error
+
+    text, text_error = metadata_service.extract_document_text(temp_path)
+    if text_error:
+        return False, text_error
+
+    content_stats = metadata_service.compute_content_statistics(text)
+    is_complete, warnings = metadata_service.validate_document_completeness(content_stats, text)
+
+    target_path = submission.file_path
+    if not target_path:
+        target_path = os.path.join(
+            current_app.config['UPLOAD_FOLDER'],
+            f"drive_submission_{submission.id}.docx"
+        )
+
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    try:
+        if os.path.abspath(temp_path) != os.path.abspath(target_path):
+            shutil.move(temp_path, target_path)
+    except Exception as move_err:
+        current_app.logger.warning(f"Could not replace stored Drive file for {submission.id}: {move_err}")
+        target_path = temp_path
+
+    analysis = submission.analysis_result
+    if not analysis:
+        analysis = AnalysisResult(submission_id=submission.id)
+        db.session.add(analysis)
+        submission.analysis_result = analysis
+
+    analysis.document_metadata = metadata
+    analysis.content_statistics = content_stats
+    analysis.document_text = text
+    analysis.is_complete_document = is_complete
+    analysis.validation_warnings = warnings
+
+    submission.file_path = target_path
+    submission.file_size = os.path.getsize(target_path) if os.path.exists(target_path) else submission.file_size
+    if drive_meta.get('name'):
+        submission.original_filename = drive_meta.get('name')
+        submission.file_name = drive_meta.get('name')
+    submission.status = SubmissionStatus.WARNING if warnings else SubmissionStatus.COMPLETED
+    submission.processing_completed_at = datetime.utcnow()
+    submission.error_message = None
+
+    db.session.commit()
+    current_app.logger.info(f"Drive submission {submission.id} analysis refreshed from latest revision")
+    return True, None
 
 @dashboard_bp.route('/overview', methods=['GET'])
 @require_authentication()
@@ -84,6 +235,8 @@ def get_submissions():
             filters['deadline_id'] = request.args.get('deadline_id')
         if request.args.get('student_id'):
             filters['student_id'] = request.args.get('student_id')
+        if request.args.get('search'):
+            filters['search'] = request.args.get('search')
         if request.args.get('team_code'):
             filters['team_code'] = request.args.get('team_code')
         if request.args.get('date_from'):
@@ -133,6 +286,22 @@ def get_submission_detail(submission_id):
         if error:
             return jsonify({'error': error}), 404 if 'not found' in error else 500
             
+        # Keep Drive-link submissions in sync with latest remote edits.
+        try:
+            if submission.google_drive_link:
+                force_refresh = str(request.args.get('force_refresh', 'false')).lower() == 'true'
+                refreshed, refresh_error = _refresh_drive_submission_analysis(submission, force_refresh=force_refresh)
+                if refresh_error:
+                    if force_refresh:
+                        return jsonify({'error': f"Refresh failed: {refresh_error}"}), 400
+                    current_app.logger.warning(
+                        f"Drive sync skipped for submission {submission.id}: {refresh_error}"
+                    )
+                elif refreshed:
+                    db.session.refresh(submission)
+        except Exception as sync_err:
+            current_app.logger.warning(f"Drive analysis sync failed for {submission.id}: {sync_err}")
+
         # [Auto-Repair] Check if metadata is missing/incomplete
         # This fixes submissions that were processed before the metadata logic was improved
         try:
@@ -540,7 +709,11 @@ def get_students():
     """Get list of students for the system"""
     try:
         user_id = request.current_user.id
-        result, error = dashboard_service.get_students(user_id)
+        archived_param = request.args.get('archived')
+        archived = None
+        if archived_param is not None:
+            archived = str(archived_param).lower() == 'true'
+        result, error = dashboard_service.get_students(user_id, archived=archived)
         
         if error:
             return jsonify({'error': error}), 404 if 'not found' in error else 500
@@ -550,6 +723,42 @@ def get_students():
     except Exception as e:
         current_app.logger.error(f"Get students error: {e}")
         return jsonify({'error': 'Error loading students'}), 500
+
+@dashboard_bp.route('/students/archive', methods=['POST'])
+@require_authentication()
+def archive_students():
+    """Archive selected students."""
+    try:
+        user_id = request.current_user.id
+        data = request.get_json() or {}
+        student_ids = data.get('student_ids', [])
+
+        result, error = dashboard_service.archive_students(user_id, student_ids)
+        if error:
+            return jsonify({'error': error}), 400
+
+        return jsonify({'message': 'Students restricted successfully', 'stats': result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Archive students error: {e}")
+        return jsonify({'error': 'Error archiving students'}), 500
+
+@dashboard_bp.route('/students/unarchive', methods=['POST'])
+@require_authentication()
+def unarchive_students():
+    """Restore selected archived students."""
+    try:
+        user_id = request.current_user.id
+        data = request.get_json() or {}
+        student_ids = data.get('student_ids', [])
+
+        result, error = dashboard_service.unarchive_students(user_id, student_ids)
+        if error:
+            return jsonify({'error': error}), 400
+
+        return jsonify({'message': 'Student restrictions removed successfully', 'stats': result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Unarchive students error: {e}")
+        return jsonify({'error': 'Error restoring students'}), 500
 
 @dashboard_bp.route('/students/import', methods=['POST'])
 @require_authentication()
@@ -647,7 +856,8 @@ def update_student(student_id):
 @require_authentication()
 def get_contribution_report(submission_id):
     """
-    Generate Collaborative Contribution Tracking report for a submission
+    Generate Collaborative Contribution Tracking report for a submission.
+    Prioritizes REAL DOCX tracked changes analysis over Google Drive API estimates.
     """
     try:
         user = request.current_user
@@ -666,53 +876,190 @@ def get_contribution_report(submission_id):
         submission = Submission.query.filter_by(id=submission_id, professor_id=user.id).first()
         if not submission:
             return jsonify({'error': 'Submission not found or unauthorized'}), 404
-            
-        if submission.submission_type != 'drive_link' or not submission.google_drive_link:
-            return jsonify({'error': 'Contribution tracking is only available for Google Drive submissions.'}), 400
-            
-        # Extract File ID
-        submission_service = SubmissionService()
-        file_id, validation_error = submission_service.validate_drive_link(submission.google_drive_link)
-        
-        if validation_error:
-            return jsonify({'error': f"Invalid Drive link: {validation_error}"}), 400
-            
-        # [NEW] Use Professor's credentials if available to ensure permission to see revisions
-        user_creds_json = None
-        session_obj = getattr(request, 'current_session', None)
-        if session_obj and session_obj.google_access_token:
-            try:
-                import json
-                creds_dict = {
-                    "token": session_obj.google_access_token,
-                    "refresh_token": session_obj.google_refresh_token,
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "client_id": current_app.config.get('GOOGLE_CLIENT_ID'),
-                    "client_secret": current_app.config.get('GOOGLE_CLIENT_SECRET'),
-                    "scopes": ['https://www.googleapis.com/auth/drive.readonly']
-                }
-                user_creds_json = json.dumps(creds_dict)
-            except Exception as cred_err:
-                current_app.logger.warning(f"Failed to prepare user credentials for report: {cred_err}")
 
-        # Generate Report
-        drive_service = DriveService()
-        report, error = drive_service.generate_contribution_report(file_id, user_creds_json)
+        force_refresh = str(request.args.get('refresh', 'false')).lower() == 'true'
+
+        # Fast cache path to avoid repeated Gemini calls within a short window.
+        try:
+            cache_key = str(submission.id)
+            submission_version = "|".join([
+                submission.updated_at.isoformat() if submission.updated_at else '',
+                submission.processing_completed_at.isoformat() if submission.processing_completed_at else '',
+                submission.google_drive_link or ''
+            ])
+            cached = _contribution_report_cache.get(cache_key)
+            if (
+                not force_refresh and
+                cached and
+                cached.get('version') == submission_version and
+                (time.time() - float(cached.get('createdAtEpoch') or 0)) < 120
+            ):
+                return jsonify(cached.get('report'))
+        except Exception as cache_err:
+            current_app.logger.warning(f"Contribution report cache read skipped: {cache_err}")
         
+        # Keep baseline stats aligned with latest Drive content when available.
+        try:
+            if submission.google_drive_link:
+                _refresh_drive_submission_analysis(submission, force_refresh=force_refresh)
+                db.session.refresh(submission)
+        except Exception as sync_err:
+            current_app.logger.warning(f"Pre-report sync failed for submission {submission_id}: {sync_err}")
+
+        # Get expected word count from analysis results
+        expected_word_count = None
+        try:
+            expected_word_count = (
+                submission.analysis_result.content_statistics.get('word_count')
+                if submission.analysis_result and submission.analysis_result.content_statistics
+                else None
+            )
+        except Exception:
+            expected_word_count = None
+        
+        drive_service = DriveService()
+        report = None
+        error = None
+        
+        # ══════════════════════════════════════════════════════════════════════════
+        # PRIORITY 1: Use REAL DOCX Tracked Changes (if file is locally available)
+        # ══════════════════════════════════════════════════════════════════════════
+        if submission.submission_type in ['file_upload', 'docx', 'word']:
+            # DOCX file uploaded locally - use REAL tracked changes
+            if submission.file_path and os.path.exists(submission.file_path):
+                current_app.logger.info(f"Analyzing DOCX tracked changes for submission {submission_id}")
+                report, error = drive_service.generate_docx_contribution_report(
+                    submission.file_path,
+                    expected_word_count=expected_word_count
+                )
+                
+                if report and not error:
+                    # Success - return real DOCX analysis
+                    return jsonify(report)
+                else:
+                    current_app.logger.warning(f"DOCX tracked changes analysis failed: {error}. Will try alternative method.")
+        
+        # ══════════════════════════════════════════════════════════════════════════
+        # PRIORITY 2: Use Google Drive API (for Google Docs/Sheets or cloud links)
+        # ══════════════════════════════════════════════════════════════════════════
+        if submission.submission_type == 'drive_link' or submission.google_drive_link:
+            if not submission.google_drive_link:
+                return jsonify({'error': 'No Google Drive link associated with this submission.'}), 400
+            
+            # Extract File ID
+            submission_service = SubmissionService()
+            file_id, validation_error = submission_service.validate_drive_link(submission.google_drive_link)
+            
+            if validation_error:
+                return jsonify({'error': f"Invalid Drive link: {validation_error}"}), 400
+            
+            # Get professor's credentials
+            user_creds_json = None
+            session_obj = getattr(request, 'current_session', None)
+            if session_obj and session_obj.google_access_token:
+                try:
+                    import json
+                    creds_dict = {
+                        "token": session_obj.google_access_token,
+                        "refresh_token": session_obj.google_refresh_token,
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "client_id": current_app.config.get('GOOGLE_CLIENT_ID'),
+                        "client_secret": current_app.config.get('GOOGLE_CLIENT_SECRET'),
+                        "scopes": ['https://www.googleapis.com/auth/drive.readonly']
+                    }
+                    user_creds_json = json.dumps(creds_dict)
+                except Exception as cred_err:
+                    current_app.logger.warning(f"Failed to prepare user credentials: {cred_err}")
+            
+            current_app.logger.info(f"Analyzing Google Drive revision history for submission {submission_id}")
+            quick_mode = str(request.args.get('quick', 'false')).lower() == 'true'
+
+            roster_rows = Student.query.filter_by(professor_id=user.id, is_archived=False).all()
+            roster_members = []
+            roster_emails = []
+            for s in roster_rows:
+                member_email = str(getattr(s, 'email', '') or '').strip().lower()
+                member_name = f"{str(getattr(s, 'first_name', '') or '').strip()} {str(getattr(s, 'last_name', '') or '').strip()}".strip()
+                if not member_name:
+                    member_name = str(getattr(s, 'student_id', '') or '').strip() or 'Student'
+                roster_members.append({
+                    'studentId': str(getattr(s, 'student_id', '') or '').strip() or None,
+                    'name': member_name,
+                    'email': member_email or None,
+                    'teamCode': str(getattr(s, 'team_code', '') or '').strip() or None,
+                    'courseYear': str(getattr(s, 'course_year', '') or '').strip() or None,
+                    'subjectNo': str(getattr(s, 'subject_no', '') or '').strip() or None,
+                })
+                if member_email:
+                    roster_emails.append(member_email)
+
+            submitter_email = None
+            if submission.student_id:
+                submitter_row = Student.query.filter_by(
+                    professor_id=user.id,
+                    student_id=submission.student_id
+                ).first()
+                if submitter_row and submitter_row.email:
+                    submitter_email = str(submitter_row.email).strip().lower()
+
+            submitter_identity = {
+                'name': submission.student_name,
+                'email': submitter_email
+            }
+
+            deadline_dt = submission.deadline.deadline_datetime if submission.deadline else None
+            
+            report, error = drive_service.generate_contribution_report(
+                file_id,
+                user_creds_json,
+                expected_word_count=expected_word_count,
+                quick_mode=quick_mode,
+                allowed_emails=roster_emails,
+                roster_members=roster_members,
+                deadline_datetime=deadline_dt,
+                submitter_identity=submitter_identity,
+                document_metadata=(submission.analysis_result.document_metadata if submission.analysis_result else None)
+            )
+        
+        # Handle errors
         if error:
             current_app.logger.error(f"Contribution report failed for {submission_id}: {error}")
             
             # Special guidance for missing tokens (likely an old session)
             if "Insufficient permissions" in error or "Google Drive service unavailable" in error:
-                 if not user_creds_json:
-                      return jsonify({
-                          'error': 'Permission setup required. Please Log Out and Log Back In with your Gmail account to enable collaborative tracking for your documents.'
-                      }), 400
+                return jsonify({
+                    'error': 'Permission setup required. Please Log Out and Log Back In with your Gmail account to enable collaborative tracking for your documents.'
+                }), 400
+
+            lowered = str(error).lower()
+            if '429' in lowered or 'quota' in lowered or 'rate limit' in lowered or 'resource exhausted' in lowered:
+                return jsonify({
+                    'error': 'AI daily limit reached. Please try again later.'
+                }), 429
                       
             return jsonify({'error': error}), 400
+        
+        if not report:
+            return jsonify({'error': 'Unable to generate contribution report for this submission type.'}), 400
+
+        # Save cache after successful generation.
+        try:
+            _contribution_report_cache[str(submission.id)] = {
+                'version': "|".join([
+                    submission.updated_at.isoformat() if submission.updated_at else '',
+                    submission.processing_completed_at.isoformat() if submission.processing_completed_at else '',
+                    submission.google_drive_link or ''
+                ]),
+                'createdAtEpoch': time.time(),
+                'report': report
+            }
+        except Exception as cache_err:
+            current_app.logger.warning(f"Contribution report cache write skipped: {cache_err}")
             
         return jsonify(report)
         
     except Exception as e:
         current_app.logger.error(f"Contribution report error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to generate contribution report'}), 500

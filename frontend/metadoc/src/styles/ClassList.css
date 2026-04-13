@@ -133,6 +133,33 @@
     border-color: var(--color-maroon);
 }
 
+.restriction-toggle-btn {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid #800000;
+    border-radius: var(--radius-md);
+    background-color: #800000;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.restriction-toggle-btn:hover {
+    border-color: #600000;
+    background-color: #600000;
+}
+
+.restriction-toggle-btn.active {
+    background-color: #4f0000;
+    border-color: #4f0000;
+    color: #ffffff;
+    box-shadow: 0 0 0 2px rgba(128, 0, 0, 0.18);
+}
+
 .team-code-filter-select {
     min-width: 132px;
     font-size: 0.88rem;
@@ -224,7 +251,7 @@
 
 .record-count {
     display: inline-block;
-    margin-top: 4px;
+    margin-top: 0;
     font-size: 0.75rem;
     color: var(--color-gray-400);
     background: var(--color-gray-100);
@@ -400,6 +427,12 @@
     border-color: #EAB308;
 }
 
+.status-badge.status-archived {
+    background-color: #DBEAFE;
+    color: #1E40AF;
+    border-color: #3B82F6;
+}
+
 /* States */
 .no-selection-state {
     padding: 100px 40px;
@@ -447,7 +480,7 @@
 }
 
 .search-no-results {
-    padding: var(--spacing-xxl) 0;
+    padding: 28px 0;
 }
 
 .no-match-message {
@@ -456,6 +489,8 @@
     align-items: center;
     gap: var(--spacing-sm);
     color: var(--color-gray-500);
+    min-height: 110px;
+    justify-content: center;
 }
 
 .no-match-message p {
@@ -561,6 +596,19 @@
 
 .modal-content form {
     padding: 20px;
+}
+
+.modal-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background-color: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.82rem;
 }
 
 .form-group {

@@ -56,6 +56,33 @@ const getStatusMeta = (status = '') => {
     return { text: 'ON TIME', className: 'status-ontime', Icon: CheckCircle };
 };
 
+const resolveSubmissionStatusMeta = (submission, deadlineDatetimeMap) => {
+    if (!submission) return getStatusMeta('on_time');
+
+    if (submission.is_late === true) {
+        return getStatusMeta('late');
+    }
+
+    if (String(submission.status || '').toLowerCase() === 'late') {
+        return getStatusMeta('late');
+    }
+
+    const deadlineKey = submission.deadline_id !== undefined && submission.deadline_id !== null
+        ? String(submission.deadline_id)
+        : null;
+    const deadlineValue = deadlineKey ? deadlineDatetimeMap.get(deadlineKey) : null;
+
+    if (deadlineValue && submission.created_at) {
+        const submittedAt = new Date(submission.created_at);
+        const deadlineAt = new Date(deadlineValue);
+        if (!Number.isNaN(submittedAt.getTime()) && !Number.isNaN(deadlineAt.getTime()) && submittedAt > deadlineAt) {
+            return getStatusMeta('late');
+        }
+    }
+
+    return getStatusMeta('on_time');
+};
+
 const getDeliverableTitle = (submission, deadlineTitleMap) => {
     const directId = submission?.deadline_id;
     const normalizedId = directId !== undefined && directId !== null ? String(directId) : null;
@@ -96,6 +123,7 @@ const formatFilenameInitials = (value = '', maxChars = 20) => {
 
 const formatDeliverableInitials = (value = '', maxChars = 10) => {
     const raw = String(value || 'Untitled Deliverable').trim();
+    if (raw.length <= maxChars) return raw;
     const chunks = raw.split(/[\s._-]+/).filter(Boolean);
 
     let initials = chunks.map((chunk) => chunk.charAt(0).toUpperCase()).join('');
@@ -126,6 +154,16 @@ const Reports = () => {
             const title = deadline.title || 'Untitled Deliverable';
             map.set(deadline.id, title);
             map.set(String(deadline.id), title);
+        });
+        return map;
+    }, [deadlines]);
+
+    const deadlineDatetimeMap = useMemo(() => {
+        const map = new Map();
+        deadlines.forEach((deadline) => {
+            if (deadline?.deadline_datetime) {
+                map.set(String(deadline.id), deadline.deadline_datetime);
+            }
         });
         return map;
     }, [deadlines]);
@@ -317,7 +355,7 @@ const Reports = () => {
                         value={sortOption}
                         onChange={(e) => setSortOption(e.target.value)}
                     >
-                        <option value="none">NONE</option>
+                        <option value="none">Sort By</option>
                         <option value="newest">Newest</option>
                         <option value="oldest">Oldest</option>
                         <option value="a_z">A-Z (Title)</option>
@@ -359,7 +397,7 @@ const Reports = () => {
                             {!loading && visibleRows.map((submission) => {
                                 const submitted = formatDateTime(submission.created_at);
                                 const modified = formatDateTime(submission.metadata_last_modified || submission.last_modified || submission.updated_at || submission.created_at);
-                                const status = getStatusMeta(submission.status);
+                                const status = resolveSubmissionStatusMeta(submission, deadlineDatetimeMap);
                                 const deliverableTitle = getDeliverableTitle(submission, deadlineTitleMap);
                                 const displayDeliverableTitle = formatDeliverableInitials(deliverableTitle, 10);
                                 const filename = submission.filename || submission.original_filename || 'Untitled';

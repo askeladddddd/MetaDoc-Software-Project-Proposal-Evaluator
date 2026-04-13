@@ -136,7 +136,7 @@ const StudentLogin = () => {
                 <h2 className="premium-card-title">Google Login</h2>
 
                 <p className="premium-card-desc">
-                    Sign in with the <strong>Gmail account</strong> that you listed in the excel class record.
+                    Sign in with the <strong>Gmail account</strong> that you listed in the excel class list.
                 </p>
 
                 <div style={{ marginTop: 'var(--spacing-xl)' }}>

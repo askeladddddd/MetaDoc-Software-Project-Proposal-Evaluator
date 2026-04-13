@@ -79,7 +79,12 @@ export const submissionAPI = {
 export const dashboardAPI = {
   getOverview: () => api.get('/dashboard/overview'),
   getSubmissions: (params) => api.get('/dashboard/submissions', { params }),
-  getSubmissionDetail: (submissionId) => api.get(`/dashboard/submissions/${submissionId}`),
+  getSubmissionDetail: (submissionId, options = {}) => api.get(
+    `/dashboard/submissions/${submissionId}`,
+    {
+      params: options.forceRefresh ? { force_refresh: true } : undefined,
+    }
+  ),
   deleteSubmission: (submissionId) => api.delete(`/dashboard/submissions/${submissionId}`),
   getDeadlines: (includePast = false) => api.get('/dashboard/deadlines', { params: { include_past: includePast } }),
   createDeadline: (data) => api.post('/dashboard/deadlines', data),
@@ -88,11 +93,22 @@ export const dashboardAPI = {
   getSubmissionFile: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/download`, { responseType: 'blob' }),
   downloadDeadlineFiles: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/download-all`, { responseType: 'blob' }),
   getDeadlineStudents: () => api.get('/dashboard/students'),
+  getArchivedStudents: () => api.get('/dashboard/students', { params: { archived: true } }),
   importDeadlineStudents: (students) => api.post('/dashboard/students/import', { students }),
   deleteDeadlineStudent: (studentId) => api.delete(`/dashboard/students/${studentId}`),
   addDeadlineStudent: (data) => api.post('/dashboard/students/add', data),
   updateDeadlineStudent: (studentId, data) => api.put(`/dashboard/students/${studentId}`, data),
-  getContributionReport: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/contribution-report`),
+  archiveStudents: (studentIds) => api.post('/dashboard/students/archive', { student_ids: studentIds }),
+  unarchiveStudents: (studentIds) => api.post('/dashboard/students/unarchive', { student_ids: studentIds }),
+  getContributionReport: (submissionId, options = {}) => api.get(
+    `/dashboard/submissions/${submissionId}/contribution-report`,
+    {
+      params: {
+        ...(options.refresh ? { refresh: true } : {}),
+      },
+      timeout: 60000,
+    }
+  ),
 };
 
 // Metadata API

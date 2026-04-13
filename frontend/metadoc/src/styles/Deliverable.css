@@ -1079,11 +1079,48 @@
   color: var(--color-gray-600);
   font-size: 0.875rem;
   line-height: 1.5;
+  margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.folder-description-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.btn-see-more-description {
+  margin-top: 0.1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #be123c;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-see-more-description:hover,
+.btn-see-more-inline:hover {
+  text-decoration: underline;
+}
+
+.btn-see-more-inline {
+  margin-left: 0.2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #be123c;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
 }
 
 /* Edit Button */
@@ -1151,6 +1188,19 @@
   color: var(--color-gray-600);
   margin: 0;
   font-size: 0.95rem;
+}
+
+.folder-info-description {
+  margin-top: 0.2rem;
+  color: var(--color-gray-600);
+  font-size: 0.9rem;
+}
+
+.folder-info-description.is-long {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
 }
 
 /* Clean up old bar styles if preferred, effectively replacing them */
@@ -1412,6 +1462,73 @@
 
 .btn-block:hover {
   background-color: #600018;
+}
+
+/* Deliverable Description Modal */
+.deliverable-description-modal {
+  max-width: 640px;
+  width: min(92vw, 640px);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.2);
+}
+
+.deliverable-description-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.deliverable-description-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #800020;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.deliverable-description-body {
+  max-height: 58vh;
+  padding: 1.25rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fbfcfe;
+}
+
+.deliverable-description-content {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.96rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.deliverable-description-footer {
+  border-top: 1px solid #e5e7eb;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  justify-content: flex-end;
+  background: #ffffff;
+}
+
+.deliverable-description-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.deliverable-description-body::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+
+.deliverable-description-body::-webkit-scrollbar-thumb {
+  background: #800020;
+  border-radius: 999px;
+}
+
+.deliverable-description-body::-webkit-scrollbar-thumb:hover {
+  background: #5f0018;
 }
 
 /* Folder Creation Modal */

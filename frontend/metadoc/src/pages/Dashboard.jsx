@@ -20,6 +20,26 @@ import Badge from '../components/common/Badge/Badge';
 import Modal from '../components/common/Modal/Modal';
 import '../styles/Dashboard.css';
 
+const RECENT_LINKS_STORAGE_KEY = 'metadoc_recent_submission_links';
+
+const loadActiveRecentLinks = () => {
+  try {
+    const raw = localStorage.getItem(RECENT_LINKS_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    const now = Date.now();
+    return parsed.filter((item) => {
+      const expiry = new Date(item.expires_at).getTime();
+      return Number.isFinite(expiry) && expiry > now;
+    });
+  } catch {
+    return [];
+  }
+};
+
 const formatStudentId = (input) => {
   if (!input) return 'N/A';
   const digits = input.replace(/\D/g, '');
@@ -86,16 +106,22 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [submissionToken, setSubmissionToken] = useState(null);
   const [tokenLoading, setTokenLoading] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [copiedTarget, setCopiedTarget] = useState(null);
   const [deadlines, setDeadlines] = useState([]);
   const [selectedDeadline, setSelectedDeadline] = useState('');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState({ title: '', body: '' });
+  const [recentGeneratedLinks, setRecentGeneratedLinks] = useState(() => loadActiveRecentLinks());
+  const [recentLinksSearch, setRecentLinksSearch] = useState('');
 
   useEffect(() => {
     fetchOverview();
     fetchDeadlines();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(RECENT_LINKS_STORAGE_KEY, JSON.stringify(recentGeneratedLinks));
+  }, [recentGeneratedLinks]);
 
   const fetchOverview = async () => {
     try {
@@ -151,6 +177,33 @@ const Dashboard = () => {
       setTokenLoading(true);
       const response = await authAPI.generateSubmissionToken(selectedDeadline);
       setSubmissionToken(response.data.token);
+
+      const selectedDeadlineData = deadlines.find(
+        (deadline) => String(deadline.id) === String(selectedDeadline)
+      );
+
+      const generatedEntry = {
+        deadline_id: selectedDeadlineData?.id ?? selectedDeadline,
+        title: selectedDeadlineData?.title || response.data?.deadline?.title || 'Untitled Deliverable',
+        token: response.data.token,
+        url: response.data.submission_url || `${window.location.origin}/submit?token=${response.data.token}`,
+        expires_at: response.data.expires_at,
+        generated_at: new Date().toISOString(),
+      };
+
+      setRecentGeneratedLinks((prev) => {
+        const now = Date.now();
+        const active = prev.filter((item) => {
+          const expiry = new Date(item.expires_at).getTime();
+          return Number.isFinite(expiry) && expiry > now;
+        });
+
+        const filtered = active.filter(
+          (item) => String(item.deadline_id) !== String(generatedEntry.deadline_id)
+        );
+
+        return [generatedEntry, ...filtered].slice(0, 12);
+      });
     } catch (err) {
       console.error('Failed to generate token:', err);
       const errorMsg = err.response?.data?.error || 'Failed to generate submission token. Please try again.';
@@ -171,8 +224,18 @@ const Dashboard = () => {
     }
     const link = `${window.location.origin}/submit?token=${submissionToken}`;
     navigator.clipboard.writeText(link);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    setCopiedTarget('current');
+    setTimeout(() => {
+      setCopiedTarget((prev) => (prev === 'current' ? null : prev));
+    }, 2000);
+  };
+
+  const copyDirectLink = async (link, targetKey) => {
+    await navigator.clipboard.writeText(link);
+    setCopiedTarget(targetKey);
+    setTimeout(() => {
+      setCopiedTarget((prev) => (prev === targetKey ? null : prev));
+    }, 2000);
   };
 
   if (loading) {
@@ -321,6 +384,7 @@ const Dashboard = () => {
       icon: FileText,
       color: 'maroon',
       change: null,
+      route: '/dashboard/reports',
     },
     {
       label: 'Active Deliverables',
@@ -328,6 +392,8 @@ const Dashboard = () => {
       icon: Calendar,
       color: 'info',
       change: null,
+      route: '/dashboard/deliverables',
+      routeState: { activeOnly: true },
     },
   ];
 
@@ -353,6 +419,23 @@ const Dashboard = () => {
     </button>
   );
 
+  const hasExistingLinkForSelected = recentGeneratedLinks.some(
+    (item) => String(item.deadline_id) === String(selectedDeadline)
+  );
+
+  const formatGeneratedDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
+  };
+
+  const filteredRecentGeneratedLinks = recentGeneratedLinks.filter((entry) =>
+    String(entry.title || '')
+      .toLowerCase()
+      .includes(recentLinksSearch.trim().toLowerCase())
+  );
+
   return (
     <div className="dashboard-page">
       <div className="dashboard-header">
@@ -376,6 +459,7 @@ const Dashboard = () => {
             onChange={(e) => {
               setSelectedDeadline(e.target.value);
               setSubmissionToken(null);
+              setCopiedTarget(null);
             }}
             className="compact-select"
           >
@@ -393,7 +477,7 @@ const Dashboard = () => {
             disabled={tokenLoading}
           >
             {tokenLoading ? <RefreshCw size={16} className="spinning" /> : <ExternalLink size={16} />}
-            Generate Link
+            {hasExistingLinkForSelected ? 'Generate Again' : 'Generate Link'}
           </button>
 
           {submissionToken && (
@@ -403,7 +487,7 @@ const Dashboard = () => {
                 onClick={copySubmissionLink}
               >
                 <Copy size={16} />
-                {copySuccess ? 'Copied!' : 'Copy'}
+                {copiedTarget === 'current' ? 'Copied!' : 'Copy'}
               </button>
             </>
           )}
@@ -416,9 +500,69 @@ const Dashboard = () => {
         )}
       </div>
 
+      <Card className="recent-links-card">
+        <div className="recent-links-header">
+          <h3>Generated Links</h3>
+          <p>Saved on this browser and removed automatically when expired.</p>
+        </div>
+
+        {recentGeneratedLinks.length > 0 && (
+          <div className="recent-links-search-wrap">
+            <input
+              type="text"
+              className="recent-links-search"
+              value={recentLinksSearch}
+              onChange={(e) => setRecentLinksSearch(e.target.value)}
+              placeholder="Search deliverable title..."
+            />
+          </div>
+        )}
+
+        {recentGeneratedLinks.length === 0 ? (
+          <p className="recent-links-empty">No active generated links yet.</p>
+        ) : filteredRecentGeneratedLinks.length === 0 ? (
+          <p className="recent-links-empty">No generated links found for that deliverable title.</p>
+        ) : (
+          <div className="recent-links-list">
+            {filteredRecentGeneratedLinks.map((entry) => (
+              <div key={`${entry.deadline_id}-${entry.token}`} className="recent-link-row">
+                <div className="recent-link-main">
+                  <p className="recent-link-title">{entry.title}</p>
+                  <code className="recent-link-url">{entry.url}</code>
+                </div>
+                <div className="recent-link-side">
+                  <span className="recent-link-meta">Generated: {formatGeneratedDate(entry.generated_at)}</span>
+                  <span className="recent-link-meta">Expiry: {formatGeneratedDate(entry.expires_at)}</span>
+                  <button
+                    className="btn-compact btn-copy btn-copy-inline"
+                    onClick={() => copyDirectLink(entry.url, entry.token)}
+                  >
+                    <Copy size={14} />
+                    {copiedTarget === entry.token ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <div className="stats-grid">
         {stats.map((stat, index) => (
-          <div key={index} className={`stat-card stat-${stat.color}`}>
+          <div
+            key={index}
+            className={`stat-card stat-${stat.color} ${stat.route ? 'is-clickable' : ''}`}
+            onClick={() => stat.route && navigate(stat.route, stat.routeState ? { state: stat.routeState } : undefined)}
+            onKeyDown={(e) => {
+              if (!stat.route) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate(stat.route, stat.routeState ? { state: stat.routeState } : undefined);
+              }
+            }}
+            role={stat.route ? 'button' : undefined}
+            tabIndex={stat.route ? 0 : undefined}
+          >
             <div className="stat-icon">
               <stat.icon size={24} />
             </div>
@@ -443,7 +587,7 @@ const Dashboard = () => {
           <h2>Recent Submission</h2>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => navigate('/dashboard/submissions')}
+            onClick={() => navigate('/dashboard/reports')}
           >
             View All
             <ArrowRight size={16} />

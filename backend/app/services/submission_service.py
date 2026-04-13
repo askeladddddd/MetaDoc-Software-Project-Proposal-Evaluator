@@ -14,7 +14,8 @@ from werkzeug.utils import secure_filename
 import magic
 
 from app.core.extensions import db
-from app.models import Submission, SubmissionStatus
+from app.models import Submission, SubmissionStatus, Student
+from sqlalchemy import or_
 from app.services.audit_service import AuditService
 
 
@@ -96,45 +97,60 @@ class SubmissionService:
                 hash_sha256.update(chunk)
         return hash_sha256.hexdigest()
     
-    def check_duplicate_submission(self, file_hash=None, drive_link=None, professor_id=None, deadline_id=None):
+    def check_duplicate_submission(self, file_hash=None, drive_link=None, professor_id=None, deadline_id=None, student_id=None, student_email=None):
         """
-        Check if a file has already been submitted
+        Check if a file has already been submitted by the same student identity.
         
         Args:
             file_hash: SHA-256 hash of the file
             drive_link: Google Drive link (if applicable)
             professor_id: Professor ID to scope the check
             deadline_id: Deadline ID to scope the check (optional)
+            student_id: Student number of current submitter (optional)
+            student_email: Gmail of current submitter (optional)
         
         Returns:
             tuple: (is_duplicate: bool, existing_submission: Submission or None)
         """
-        query = Submission.query
-        
-        # Check by file hash (for both uploads and drive links)
-        if file_hash:
-            query = query.filter_by(file_hash=file_hash)
-        
+        scope_query = Submission.query
+
+        if professor_id:
+            scope_query = scope_query.filter_by(professor_id=professor_id)
+        if deadline_id:
+            scope_query = scope_query.filter_by(deadline_id=deadline_id)
+
+        identity_student_ids = set()
+        normalized_student_id = str(student_id or '').strip()
+        normalized_email = str(student_email or '').strip().lower()
+
+        if normalized_student_id:
+            identity_student_ids.add(normalized_student_id)
+
+        if normalized_email and professor_id:
+            email_students = Student.query.filter(
+                Student.professor_id == professor_id,
+                db.func.lower(Student.email) == normalized_email
+            ).all()
+            for student in email_students:
+                if student.student_id:
+                    identity_student_ids.add(str(student.student_id).strip())
+
+        # If we can resolve identity, only compare duplicates within that identity.
+        # Otherwise, fallback to the existing behavior (scope-level duplicate check).
+        if identity_student_ids:
+            scope_query = scope_query.filter(Submission.student_id.in_(list(identity_student_ids)))
+
         # Check by Google Drive link (for drive link submissions)
         if drive_link:
-            drive_query = Submission.query.filter_by(google_drive_link=drive_link)
-            if professor_id:
-                drive_query = drive_query.filter_by(professor_id=professor_id)
-            if deadline_id:
-                drive_query = drive_query.filter_by(deadline_id=deadline_id)
-            
+            drive_query = scope_query.filter(Submission.google_drive_link == drive_link)
             existing = drive_query.first()
             if existing:
                 return True, existing
-        
-        # Apply filters for hash-based check
+
+        # Check by file hash (for both uploads and drive links)
         if file_hash:
-            if professor_id:
-                query = query.filter_by(professor_id=professor_id)
-            if deadline_id:
-                query = query.filter_by(deadline_id=deadline_id)
-            
-            existing = query.first()
+            hash_query = scope_query.filter(Submission.file_hash == file_hash)
+            existing = hash_query.first()
             if existing:
                 return True, existing
         

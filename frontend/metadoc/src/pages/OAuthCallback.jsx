@@ -43,12 +43,12 @@ const OAuthCallback = () => {
         const error = rawError ? decodeURIComponent(rawError) : null;
 
         if (error) {
-          const isClassRecordError = /class records|excel class record|not associated with any student|class record/i.test(error);
+          const isClassRecordError = /class list|excel class list|not associated with any student/i.test(error);
           const errorDelay = isStudentFlow ? 30000 : 3000;
           setStatus('error');
           setMessage(
             isClassRecordError
-              ? 'This account is not listed in the class record. Please sign in again using the Gmail account registered in the class record. Or try to contact your professor to update this.'
+              ? 'This account is not listed in the class list. Please sign in again using the Gmail account registered in the class list. Or try to contact your professor to update this.'
               : `Authentication failed: ${error}`
           );
           setTimeout(() => navigate(fallbackLoginPath), errorDelay);

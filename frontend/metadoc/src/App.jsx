@@ -9,7 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Deliverable from './pages/Deliverable';
 import SubmissionDetailView from './pages/SubmissionDetailView';
 import Reports from './pages/Reports';
-import ClassRecord from './pages/ClassRecord';
+import ClassList from './pages/ClassList';
 import StudentLogin from './pages/StudentLogin';
 import './App.css';
 
@@ -132,11 +132,11 @@ function App() {
           />
 
           <Route
-            path="/dashboard/class-record"
+            path="/dashboard/class-list"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <ClassRecord />
+                  <ClassList />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -151,7 +151,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           {/* Default redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

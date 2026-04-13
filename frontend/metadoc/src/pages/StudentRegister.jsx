@@ -102,7 +102,7 @@ const StudentRegister = () => {
 
             navigate(`/submit?token=${token}`);
         } catch (err) {
-            setError(err.response?.data?.error || 'Account linking failed. Ensure your ID is in the class record.');
+            setError(err.response?.data?.error || 'Account linking failed. Ensure your ID is in the class list.');
         } finally {
             setLoading(false);
         }
@@ -122,10 +122,10 @@ const StudentRegister = () => {
 
             <Card className="submit-container" style={{ maxWidth: '600px' }}>
                 <div className="submit-header" style={{ textAlign: 'center' }}>
-                    <h2>Verify Class Record</h2>
+                    <h2>Verify Class List</h2>
                     <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--spacing-md)' }}>
                         Gmail account <strong>{user?.email}</strong> is not yet linked to an ID.
-                        Please provide your details as they appear in the class record.
+                        Please provide your details as they appear in the class list.
                     </p>
                     {deadlineInfo && (
                         <div className="deadline-badge" style={{

@@ -44,7 +44,7 @@ class DashboardService:
                 continue
 
             if sid_norm and self._normalize_text(existing.student_id) == sid_norm:
-                return f"Student ID {sid_norm} already exists."
+                return f"Student No. {sid_norm} already exists."
 
             if email_norm and self._normalize_lower(existing.email) == email_norm:
                 return f"Gmail {email_norm} already exists."
@@ -161,8 +161,6 @@ class DashboardService:
                 deadline_at_iso = None
                 if hasattr(s, 'deadline') and s.deadline and s.deadline.deadline_datetime:
                     deadline_at_iso = s.deadline.deadline_datetime.isoformat()
-                    if not deadline_at_iso.endswith('Z') and '+' not in deadline_at_iso:
-                        deadline_at_iso += 'Z'
                 recent.append({
                     'id': s.id,
                     'job_id': s.job_id,
@@ -217,12 +215,36 @@ class DashboardService:
                 
                 if filters.get('search'):
                     search_term = f"%{filters['search']}%"
+                    matching_team_students = Student.query.filter_by(professor_id=user_id)\
+                        .filter(Student.team_code.ilike(search_term)).all()
+
+                    matching_team_student_ids = set()
+                    for st in matching_team_students:
+                        raw_sid = str(st.student_id or '').strip()
+                        if not raw_sid:
+                            continue
+
+                        matching_team_student_ids.add(raw_sid)
+
+                        digits = ''.join(ch for ch in raw_sid if ch.isdigit())
+                        if digits:
+                            matching_team_student_ids.add(digits)
+                            if len(digits) >= 9:
+                                matching_team_student_ids.add(
+                                    f"{digits[:2]}-{digits[2:6]}-{digits[6:9]}"
+                                )
+
+                    search_conditions = [
+                        Submission.original_filename.ilike(search_term),
+                        Submission.student_name.ilike(search_term),
+                        Submission.student_id.ilike(search_term)
+                    ]
+
+                    if matching_team_student_ids:
+                        search_conditions.append(Submission.student_id.in_(list(matching_team_student_ids)))
+
                     query = query.filter(
-                        db.or_(
-                            Submission.original_filename.ilike(search_term),
-                            Submission.student_name.ilike(search_term),
-                            Submission.student_id.ilike(search_term)
-                        )
+                        db.or_(*search_conditions)
                     )
             
             student_rows = Student.query.filter_by(professor_id=user_id).all()
@@ -462,10 +484,14 @@ class DashboardService:
             current_app.logger.error(f"Deadlines list error: {e}")
             return None, str(e)
 
-    def get_students(self, user_id):
-        """Get all students registered/expected for the professor"""
+    def get_students(self, user_id, archived=None):
+        """Get students for the professor. Optionally filter by archive state."""
         try:
-            students = Student.query.filter_by(professor_id=user_id).order_by(Student.created_at.asc()).all()
+            query = Student.query.filter_by(professor_id=user_id)
+            if archived is not None:
+                query = query.filter_by(is_archived=archived)
+
+            students = query.order_by(Student.created_at.asc()).all()
             return [s.to_dict() for s in students], None
             
         except Exception as e:
@@ -530,6 +556,8 @@ class DashboardService:
                     existing.first_name = first_name or existing.first_name
                     existing.course_year = data.get('course_year', existing.course_year)
                     existing.team_code = data.get('team_code', existing.team_code)
+                    if 'subject_no' in data:
+                        existing.subject_no = data.get('subject_no')
                     
                     # Update email if provided, otherwise check format
                     if email:
@@ -545,6 +573,7 @@ class DashboardService:
                         first_name=first_name,
                         course_year=data.get('course_year'),
                         team_code=data.get('team_code'),
+                        subject_no=data.get('subject_no'),
                         professor_id=user_id,
                         is_registered=False
                     )
@@ -621,6 +650,7 @@ class DashboardService:
                 email=email,
                 course_year=student_data.get('course_year'),
                 team_code=student_data.get('team_code'),
+                subject_no=student_data.get('subject_no'),
                 professor_id=user_id,
                 is_registered=False
             )
@@ -672,10 +702,75 @@ class DashboardService:
                 student.course_year = student_data['course_year']
             if 'team_code' in student_data:
                 student.team_code = student_data['team_code']
+            if 'subject_no' in student_data:
+                student.subject_no = student_data['subject_no']
             
             db.session.commit()
             return student.to_dict(), None
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Update student error: {e}")
+            return None, str(e)
+
+    def archive_students(self, user_id, student_ids):
+        """Archive selected students for the professor."""
+        try:
+            if not student_ids:
+                return None, "No students selected for archive."
+
+            students = Student.query.filter(
+                Student.professor_id == user_id,
+                Student.id.in_(student_ids)
+            ).all()
+
+            if not students:
+                return None, "No matching students found."
+
+            now = datetime.utcnow()
+            archived_count = 0
+            for student in students:
+                if not student.is_archived:
+                    student.is_archived = True
+                    student.archived_at = now
+                    archived_count += 1
+
+            db.session.commit()
+            return {
+                'archived': archived_count,
+                'total_selected': len(student_ids)
+            }, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Archive students error: {e}")
+            return None, str(e)
+
+    def unarchive_students(self, user_id, student_ids):
+        """Restore archived students for the professor."""
+        try:
+            if not student_ids:
+                return None, "No students selected for restore."
+
+            students = Student.query.filter(
+                Student.professor_id == user_id,
+                Student.id.in_(student_ids)
+            ).all()
+
+            if not students:
+                return None, "No matching students found."
+
+            restored_count = 0
+            for student in students:
+                if student.is_archived:
+                    student.is_archived = False
+                    student.archived_at = None
+                    restored_count += 1
+
+            db.session.commit()
+            return {
+                'restored': restored_count,
+                'total_selected': len(student_ids)
+            }, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Unarchive students error: {e}")
             return None, str(e)

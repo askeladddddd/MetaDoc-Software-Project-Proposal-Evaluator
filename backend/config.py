@@ -41,9 +41,22 @@ class Config:
     GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')
     GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE')
     
-    # Gemini AI Configuration (Optional)
+    # Gemini AI Configuration
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    
+    GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash'
+    GEMINI_FALLBACK_MODEL = os.environ.get('GEMINI_FALLBACK_MODEL') or 'gemini-2.5-flash-lite'
+    COLLAB_AI_MODE = 'gemini'
+    COLLAB_AI_TIMEOUT_SECONDS = int(os.environ.get('COLLAB_AI_TIMEOUT_SECONDS') or 25)
+    COLLAB_SESSION_WINDOW_MINUTES = int(os.environ.get('COLLAB_SESSION_WINDOW_MINUTES') or 30)
+    COLLAB_SINGLE_REVISION_DEFAULT_MINUTES = int(os.environ.get('COLLAB_SINGLE_REVISION_DEFAULT_MINUTES') or 5)
+    COLLAB_MAX_REVISION_PAGES = int(os.environ.get('COLLAB_MAX_REVISION_PAGES') or 50)
+    COLLAB_MICRO_EDIT_REVISION_THRESHOLD = int(os.environ.get('COLLAB_MICRO_EDIT_REVISION_THRESHOLD') or 50)
+    COLLAB_MICRO_EDIT_MINUTES_THRESHOLD = float(os.environ.get('COLLAB_MICRO_EDIT_MINUTES_THRESHOLD') or 10)
+    COLLAB_MASSIVE_PASTE_WPM_THRESHOLD = float(os.environ.get('COLLAB_MASSIVE_PASTE_WPM_THRESHOLD') or 80)
+    COLLAB_HIGH_IDLE_MINUTES_THRESHOLD = float(os.environ.get('COLLAB_HIGH_IDLE_MINUTES_THRESHOLD') or 180)
+    COLLAB_HIGH_IDLE_WORDCOUNT_THRESHOLD = int(os.environ.get('COLLAB_HIGH_IDLE_WORDCOUNT_THRESHOLD') or 500)
+    COLLAB_UNVERIFIED_RATIO_THRESHOLD = float(os.environ.get('COLLAB_UNVERIFIED_RATIO_THRESHOLD') or 0.40)
+
     # Redis Configuration
     REDIS_URL = os.environ.get('REDIS_URL') or 'redis://localhost:6379/0'
     

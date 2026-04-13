@@ -31,6 +31,104 @@ class MetadataService:
     def max_word_count(self):
         return current_app.config.get('MAX_DOCUMENT_WORDS', 15000)
     
+    def extract_tracked_changes_analysis(self, file_path):
+        """
+        Extract REAL word additions and deletions from DOCX tracked changes.
+        Analyzes w:ins (insertions) and w:del (deletions) elements to get actual contributor metrics.
+        """
+        try:
+            with zipfile.ZipFile(file_path, 'r') as zip_file:
+                if 'word/document.xml' not in zip_file.namelist():
+                    return None, "No document found"
+                
+                doc_xml = zip_file.read('word/document.xml')
+                root = ET.fromstring(doc_xml)
+                
+                W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                W_AUTHOR = f'{{{W_NS}}}author'
+                W_DATE = f'{{{W_NS}}}date'
+                W_INS = f'{{{W_NS}}}ins'
+                W_DEL = f'{{{W_NS}}}del'
+                W_T = f'{{{W_NS}}}t'
+                W_R = f'{{{W_NS}}}r'
+                W_P = f'{{{W_NS}}}p'
+                
+                # Dictionary to store per-contributor metrics: author -> {words_added, words_deleted, changes_count}
+                contributor_metrics = {}
+                
+                # Helper function to extract text from an element
+                def extract_text(element):
+                    """Extract all text content from an element"""
+                    text_parts = []
+                    for t_elem in element.findall(f'.//{W_T}'):
+                        if t_elem.text:
+                            text_parts.append(t_elem.text)
+                    return ''.join(text_parts)
+                
+                # Helper function to count words in text
+                def count_words(text):
+                    """Count words in text"""
+                    if not text:
+                        return 0
+                    return len(text.split())
+                
+                # Parse document for tracked changes
+                for elem in root.iter():
+                    author = None
+                    change_date = None
+                    words_changed = 0
+                    change_type = None
+                    
+                    # Handle insertions (w:ins)
+                    if elem.tag == W_INS:
+                        author = elem.get(W_AUTHOR, '').strip()
+                        change_date = elem.get(W_DATE, '').strip()
+                        change_type = 'inserted'
+                        
+                        # Count words in inserted content
+                        text_content = extract_text(elem)
+                        words_changed = count_words(text_content)
+                        
+                    # Handle deletions (w:del)
+                    elif elem.tag == W_DEL:
+                        author = elem.get(W_AUTHOR, '').strip()
+                        change_date = elem.get(W_DATE, '').strip()
+                        change_type = 'deleted'
+                        
+                        # Count words in deleted content
+                        text_content = extract_text(elem)
+                        words_changed = count_words(text_content)
+                    
+                    # Record the change if we have an author
+                    if author and change_type and words_changed > 0:
+                        if author not in contributor_metrics:
+                            contributor_metrics[author] = {
+                                'name': author,
+                                'words_added': 0,
+                                'words_deleted': 0,
+                                'insertions': 0,
+                                'deletions': 0,
+                                'last_change': change_date
+                            }
+                        
+                        if change_type == 'inserted':
+                            contributor_metrics[author]['words_added'] += words_changed
+                            contributor_metrics[author]['insertions'] += 1
+                        else:
+                            contributor_metrics[author]['words_deleted'] += words_changed
+                            contributor_metrics[author]['deletions'] += 1
+                        
+                        # Update last change date
+                        if change_date:
+                            if not contributor_metrics[author]['last_change'] or change_date > contributor_metrics[author]['last_change']:
+                                contributor_metrics[author]['last_change'] = change_date
+                
+                return list(contributor_metrics.values()), None
+                
+        except Exception as e:
+            current_app.logger.error(f"Tracked changes analysis failed: {e}")
+            return None, f"Could not analyze tracked changes: {str(e)}"
+    
     def extract_docx_metadata(self, file_path, external_metadata=None):
         """
         Extract metadata from DOCX file using python-docx and direct XML parsing.
@@ -372,8 +470,18 @@ class MetadataService:
             # Extract text from paragraphs
             paragraphs = []
             for paragraph in doc.paragraphs:
+                has_page_break = False
+                for run in paragraph.runs:
+                    run_xml = run._element.xml
+                    if 'w:type="page"' in run_xml or '<w:lastRenderedPageBreak' in run_xml:
+                        has_page_break = True
+                        break
+
                 if paragraph.text.strip():
                     paragraphs.append(paragraph.text.strip())
+                if has_page_break:
+                    # Keep explicit page delimiters so page counting can use real breaks.
+                    paragraphs.append('\f')
             
             # Extract text from tables
             table_text = []
@@ -410,23 +518,48 @@ class MetadataService:
         
         # Basic counts
         character_count = len(text)
-        character_count_no_spaces = len(text.replace(' ', ''))
+        character_count_no_spaces = len(re.sub(r'\s+', '', text))
         
-        # Word count (split by whitespace and filter empty strings)
-        words = [word.strip() for word in text.split() if word.strip()]
+        # Word count
+        words = re.findall(r"\b[\w'-]+\b", text)
         word_count = len(words)
-        
-        # Sentence count (split by sentence endings)
-        sentences = re.split(r'[.!?]+', text)
-        sentences = [s.strip() for s in sentences if s.strip()]
-        sentence_count = len(sentences)
+
+        # Sentence count with basic abbreviation/decimal handling.
+        sentence_input = re.sub(r'\s+', ' ', text).strip()
+        if sentence_input:
+            sentence_work = re.sub(r'(\d)\.(\d)', r'\1<prd>\2', sentence_input)
+            abbreviations = [
+                'Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sr', 'Jr', 'St',
+                'etc', 'e.g', 'i.e', 'vs', 'Fig', 'No'
+            ]
+            for abbr in abbreviations:
+                sentence_work = re.sub(
+                    rf'\b{re.escape(abbr)}\.',
+                    lambda m: m.group(0).replace('.', '<prd>'),
+                    sentence_work,
+                    flags=re.IGNORECASE
+                )
+
+            sentence_chunks = re.split(r'[.!?]+(?:\s+|$)', sentence_work)
+            sentence_count = sum(
+                1
+                for chunk in sentence_chunks
+                if re.search(r'[A-Za-z0-9]', chunk.replace('<prd>', '.'))
+            )
+        else:
+            sentence_count = 0
         
         # Paragraph count (split by double newlines or single newlines)
         paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
         paragraph_count = len(paragraphs)
         
-        # Estimated pages (assuming ~250 words per page)
-        estimated_pages = max(1, round(word_count / 250))
+        # Page count: explicit DOCX page breaks first, with word-based fallback.
+        explicit_page_breaks = text.count('\f')
+        estimated_pages = ((word_count + 249) // 250) if word_count > 0 else 0
+        if explicit_page_breaks > 0:
+            estimated_pages = max(explicit_page_breaks + 1, estimated_pages)
+        elif word_count > 0 and estimated_pages == 0:
+            estimated_pages = 1
         
         # Averages
         average_words_per_sentence = word_count / max(sentence_count, 1)

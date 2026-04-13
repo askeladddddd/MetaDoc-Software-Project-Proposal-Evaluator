@@ -29,11 +29,11 @@ const TokenBasedSubmission = () => {
   // Drive link form state
   const [driveData, setDriveData] = useState({
     drive_link: '',
-    semester: '',
   });
 
   const [linkValidation, setLinkValidation] = useState(null);
   const [deadlineInfo, setDeadlineInfo] = useState(null);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
 
   // Get token from URL
   const getTokenFromURL = () => {
@@ -78,7 +78,7 @@ const TokenBasedSubmission = () => {
                 setIsProfessor(true);
                 setRegistrationStatusMessage('');
               } else {
-                setRegistrationStatusMessage(response.data.message || 'Your Gmail account is not in the class record list for this submission link.');
+                setRegistrationStatusMessage(response.data.message || 'Your Gmail account is not in the class list for this submission link.');
               }
             }
           } catch (err) {
@@ -88,7 +88,7 @@ const TokenBasedSubmission = () => {
             setRegistrationStatusMessage(
               err.response?.data?.message ||
               err.response?.data?.error ||
-              'Unable to verify if your Gmail account is in the class record list. Please try again.'
+              'Unable to verify if your Gmail account is in the class list. Please try again.'
             );
           } finally {
             setCheckingRegistration(false);
@@ -138,11 +138,6 @@ const TokenBasedSubmission = () => {
 
   const handleDriveLinkSubmit = async (e) => {
     e.preventDefault();
-    if (!driveData.semester) {
-      setError('Please select a semester (1ST or 2ND)');
-      return;
-    }
-
     if (!driveData.drive_link) {
       setError('Please enter a Google Drive link');
       return;
@@ -164,12 +159,12 @@ const TokenBasedSubmission = () => {
 
       const response = await submissionAPI.submitDriveLink(submissionData);
       setSuccess({
-        message: '✅ Google Drive document retrieved and analysis started successfully!',
+        message: 'Your file has been submitted successfully.',
         jobId: response.data.job_id,
       });
 
       // Reset form
-      setDriveData({ drive_link: '', semester: '' });
+      setDriveData({ drive_link: '' });
       setLinkValidation(null);
 
       // Clear success message after 5 seconds
@@ -199,6 +194,13 @@ const TokenBasedSubmission = () => {
       setLoading(false);
     }
   };
+
+  const canSubmitDriveLink = Boolean(driveData.drive_link?.trim()) && !loading && !validating;
+  const descriptionText = String(deadlineInfo?.description || '').trim();
+  const isLongDescription = descriptionText.length > 160;
+  const descriptionPreview = isLongDescription
+    ? `${descriptionText.slice(0, 160).trim()}...`
+    : descriptionText;
 
   const handleStudentLogin = () => {
     // Save current URL for redirect after OAuth
@@ -235,7 +237,7 @@ const TokenBasedSubmission = () => {
           <h2 className="premium-card-title">Google Login</h2>
 
           <p className="premium-card-desc">
-            Sign in with the <strong>Gmail account</strong> that you listed in the excel class record.
+            Sign in with the <strong>Gmail account</strong> that you listed in the excel class list.
           </p>
 
           <div style={{ marginTop: 'var(--spacing-xl)' }}>
@@ -337,12 +339,12 @@ const TokenBasedSubmission = () => {
           <h2 className="premium-card-title" style={{ color: '#dc2626' }}>Access Denied</h2>
 
           <p className="premium-card-desc" style={{ marginBottom: '1.5rem', fontWeight: 'bold', color: '#991b1b' }}>
-            {registrationStatusMessage || 'Your Gmail account is not in this class record list'}
+            {registrationStatusMessage || 'Your Gmail account is not in this class list'}
           </p>
 
           <p className="premium-card-desc" style={{ fontSize: '0.95rem' }}>
             Logged in as: <strong>{user?.email}</strong><br /><br />
-            Please ensure you are using the <strong>Gmail account</strong> that you listed in the excel class record. If this IS the correct account, contact your professor.
+            Please ensure you are using the <strong>Gmail account</strong> that you listed in the excel class list. If this IS the correct account, contact your professor.
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginTop: '2rem' }}>
@@ -379,59 +381,33 @@ const TokenBasedSubmission = () => {
             <div className="deadline-info">
               <h3 className="deadline-title">{deadlineInfo.title}</h3>
               {deadlineInfo.description && (
-                <p className="deadline-description">{deadlineInfo.description}</p>
+                <div className="deadline-description-block">
+                  <p className="deadline-description">{descriptionPreview}</p>
+                  {isLongDescription && (
+                    <button
+                      type="button"
+                      className="deadline-read-more-btn"
+                      onClick={() => setShowDescriptionModal(true)}
+                    >
+                      Read more
+                    </button>
+                  )}
+                </div>
               )}
-              <div className="submission-context" style={{
-                marginTop: 'var(--spacing-md)',
-                padding: 'var(--spacing-md)',
-                background: 'rgba(128, 0, 32, 0.03)',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid rgba(128, 0, 32, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--spacing-md)',
-                textAlign: 'left'
-              }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: 'var(--color-maroon)',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.25rem',
-                  fontWeight: 'bold',
-                  boxShadow: 'var(--shadow-sm)'
-                }}>
+              <div className="submission-context">
+                <div className="submission-context-avatar">
                   {studentInfo?.name?.charAt(0) || 'S'}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Submitting as</p>
-                  <p style={{ fontWeight: '700', color: 'var(--color-maroon-dark)', margin: '2px 0', fontSize: '1.05rem' }}>
+                <div className="submission-context-details">
+                  <p className="submission-context-label">Submitting as</p>
+                  <p className="submission-context-name">
                     {studentInfo?.name || 'Student'}
                   </p>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Student ID: {studentInfo?.student_id || 'N/A'}</p>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Course & Year: {studentInfo?.course_year || 'N/A'}</p>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Team Code: {studentInfo?.team_code || 'N/A'}</p>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', margin: 0 }}>{studentInfo?.email || user?.email || ''}</p>
+                  <p className="submission-context-meta">Student ID: {studentInfo?.student_id || 'N/A'}</p>
+                  <p className="submission-context-meta">Course & Year: {studentInfo?.course_year || 'N/A'}</p>
+                  <p className="submission-context-meta">Team Code: {studentInfo?.team_code || 'N/A'}</p>
+                  <p className="submission-context-email">{studentInfo?.email || user?.email || ''}</p>
 
-                  <div className="submission-semester-wrap">
-                    <label htmlFor="submission-semester" className="submission-semester-label">Semester</label>
-                    <select
-                      id="submission-semester"
-                      name="semester"
-                      value={driveData.semester}
-                      onChange={(e) => setDriveData({ ...driveData, semester: e.target.value })}
-                      className="submission-semester-select"
-                      required
-                    >
-                      <option value="">Select</option>
-                      <option value="1ST">1ST</option>
-                      <option value="2ND">2ND</option>
-                    </select>
-                  </div>
                 </div>
               </div>
             </div>
@@ -465,9 +441,9 @@ const TokenBasedSubmission = () => {
         }
 
         <div className="submit-content">
-          <div className="card-header flex items-baseline gap-2">
-            <h3 className="card-title text-maroon" style={{ color: 'var(--color-maroon)', fontSize: '1.2rem', margin: 0 }}>Google Drive Submission</h3>
-            <p className="text-gray-600 text-sm" style={{ margin: 0 }}>
+          <div className="card-header submission-drive-header">
+            <h3 className="card-title text-maroon submission-drive-title">Google Drive Submission</h3>
+            <p className="text-gray-600 text-sm submission-drive-subtitle">
               Provide a link to your Google Docs or DOCX file
             </p>
           </div>
@@ -475,7 +451,7 @@ const TokenBasedSubmission = () => {
           <form onSubmit={handleDriveLinkSubmit} className="flex flex-col gap-4">
             <div className="form-group">
               <label className="form-label">GOOGLE DRIVE LINK</label>
-              <div style={{ position: 'relative' }}>
+              <div className="drive-link-input-wrap">
                 <input
                   type="url"
                   name="drive_link"
@@ -492,21 +468,7 @@ const TokenBasedSubmission = () => {
                   type="button"
                   onClick={handleValidateLink}
                   disabled={!driveData.drive_link || validating}
-                  className="flex items-center justify-center transition-colors"
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    backgroundColor: 'var(--color-gold)',
-                    width: '3rem',
-                    borderTopRightRadius: 'var(--radius-md)',
-                    borderBottomRightRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-gray-300)',
-                    borderLeft: 'none',
-                    cursor: (!driveData.drive_link || validating) ? 'not-allowed' : 'pointer',
-                    opacity: (!driveData.drive_link || validating) ? 0.7 : 1
-                  }}
+                  className="drive-link-validate-btn flex items-center justify-center transition-colors"
                 >
                   {validating ? (
                     <div className="btn-spinner" style={{ color: 'var(--color-maroon)' }}></div>
@@ -572,16 +534,34 @@ const TokenBasedSubmission = () => {
               type="submit"
               size="large"
               loading={loading}
-              disabled={!driveData.drive_link || !driveData.semester}
+              disabled={!canSubmitDriveLink}
               icon={LinkIcon}
-              className="w-full"
-              style={{ marginTop: 'var(--spacing-md)' }}
+              className="w-full submit-analysis-btn"
             >
               Submit for Analysis
             </Button>
           </form>
         </div>
       </Card >
+
+      {showDescriptionModal && (
+        <div className="modal-overlay" onClick={() => setShowDescriptionModal(false)}>
+          <div className="modal-content submission-description-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Description</h2>
+              <button className="btn-close" onClick={() => setShowDescriptionModal(false)}>
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="submission-description-scrollable">
+                {descriptionText}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

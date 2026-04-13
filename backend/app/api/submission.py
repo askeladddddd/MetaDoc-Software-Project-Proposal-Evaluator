@@ -58,6 +58,25 @@ def normalize_semester(raw_semester):
 
     return None
 
+
+def resolve_submission_semester(submitted_at=None):
+    """Resolve semester from submission date.
+
+    Rules:
+    - 1ST semester: August to December
+    - 2ND semester: January to May
+    """
+    date = submitted_at or datetime.utcnow()
+    month = date.month
+
+    if 8 <= month <= 12:
+        return '1ST'
+    if 1 <= month <= 5:
+        return '2ND'
+
+    # Fallback for months outside the defined windows.
+    return '2ND'
+
 def validate_submission_token(token, increment=False):
     """Validate submission token and return token with deadline info"""
     from app.models import SubmissionToken, Deadline
@@ -170,6 +189,13 @@ def get_student_status():
         ).first()
         
         if student:
+            if student.is_archived:
+                return jsonify({
+                    'is_registered': False,
+                    'is_archived': True,
+                    'message': 'Your submission access has been restricted by your professor. Please contact your professor for assistance.'
+                }), 200
+
             # Auto-register if not already marked (first time logging in)
             if not student.is_registered:
                 student.is_registered = True
@@ -237,6 +263,8 @@ def register_student():
             db.func.lower(Student.email) == user_email
         ).first()
         if existing_email:
+            if existing_email.is_archived:
+                return jsonify({'error': 'Your submission access has been restricted by your professor. Please contact your professor for assistance.'}), 403
             return jsonify({
                 'message': 'Account already registered',
                 'student_id': existing_email.student_id,
@@ -252,6 +280,9 @@ def register_student():
         # 3. Check if student ID is already linked to another email
         if student.email and student.email != user_email:
             return jsonify({'error': 'This Student ID is already registered to a different email account.'}), 400
+
+        if student.is_archived:
+            return jsonify({'error': 'Your submission access has been restricted by your professor. Please contact your professor for assistance.'}), 403
             
         # 4. Link the Google account and update registration status
         student.email = user_email
@@ -285,7 +316,8 @@ def get_student_links():
         
         # Get all students with this email
         student_records = Student.query.filter(
-            db.func.lower(Student.email) == user.email.lower()
+            db.func.lower(Student.email) == user.email.lower(),
+            Student.is_archived == False
         ).all()
         
         if not student_records:
@@ -353,10 +385,7 @@ def upload_file():
         
         student_id = request.form.get('student_id', '').strip()
         student_name = request.form.get('student_name', '').strip()
-        semester = normalize_semester(request.form.get('semester'))
-
-        if not semester:
-            return jsonify({'error': 'Semester is required. Please select 1ST or 2ND semester.'}), 400
+        semester = resolve_submission_semester()
 
         if user.role == UserRole.STUDENT:
             student = Student.query.filter(
@@ -365,6 +394,9 @@ def upload_file():
             ).first()
             if not student:
                 return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+
+            if student.is_archived:
+                return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
             
             # Override with official class record info
             student_id = student.student_id
@@ -428,7 +460,9 @@ def upload_file():
         is_duplicate, existing_submission = submission_service.check_duplicate_submission(
             file_hash=file_hash,
             professor_id=professor_id,
-            deadline_id=deadline_id
+            deadline_id=deadline_id,
+            student_id=student_id if student_id else None,
+            student_email=(user.email or '').strip().lower() if getattr(user, 'email', None) else None
         )
         
         if is_duplicate:
@@ -648,10 +682,7 @@ def submit_drive_link():
         drive_link = data['drive_link'].strip()
         student_id = data.get('student_id', '').strip()
         student_name = data.get('student_name', '').strip()
-        semester = normalize_semester(data.get('semester'))
-
-        if not semester:
-            return jsonify({'error': 'Semester is required. Please select 1ST or 2ND semester.'}), 400
+        semester = resolve_submission_semester()
 
         if user.role == UserRole.STUDENT:
             student = Student.query.filter(
@@ -660,6 +691,9 @@ def submit_drive_link():
             ).first()
             if not student:
                 return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+
+            if student.is_archived:
+                return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
             
             # Override with official class record info
             student_id = student.student_id
@@ -735,7 +769,9 @@ def submit_drive_link():
             file_hash=file_hash,
             drive_link=drive_link,
             professor_id=professor_id,
-            deadline_id=deadline_id
+            deadline_id=deadline_id,
+            student_id=student_id if student_id else None,
+            student_email=(user.email or '').strip().lower() if getattr(user, 'email', None) else None
         )
         
         if is_duplicate:
