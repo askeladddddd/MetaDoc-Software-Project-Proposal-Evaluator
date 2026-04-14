@@ -17,7 +17,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from app.core.extensions import db
-from app.models import User, UserSession, UserRole, Student
+from app.models import User, UserSession, UserRole, Student, Deadline, Submission, SubmissionToken
 
 
 class AuthService:
@@ -25,6 +25,36 @@ class AuthService:
     
     def __init__(self):
         pass
+
+    def _has_professor_owned_data(self, user_id):
+        """Return True when user already owns professor resources and should not be auto-converted."""
+        if not user_id:
+            return False
+
+        return (
+            Deadline.query.filter_by(professor_id=user_id).first() is not None
+            or SubmissionToken.query.filter_by(professor_id=user_id).first() is not None
+            or Submission.query.filter_by(professor_id=user_id).first() is not None
+        )
+
+    def _normalize_profile_picture_url(self, picture_url):
+        if not picture_url:
+            return None
+
+        normalized = str(picture_url).strip()
+        if normalized.startswith('http://'):
+            normalized = 'https://' + normalized[len('http://'):]
+
+        # Prefer a clearer avatar size when Google provides a size suffix.
+        if 'googleusercontent.com' in normalized and '=s' in normalized:
+            try:
+                suffix_index = normalized.rfind('=s')
+                if suffix_index != -1:
+                    normalized = normalized[:suffix_index] + '=s256-c'
+            except Exception:
+                pass
+
+        return normalized
     
     @property
     def google_client_id(self):
@@ -141,48 +171,61 @@ class AuthService:
                 clock_skew_in_seconds=60
             )
             
-            email = user_info.get('email')
+            email = (user_info.get('email') or '').strip()
             name = user_info.get('name')
-            picture = user_info.get('picture')
+            picture = self._normalize_profile_picture_url(user_info.get('picture'))
             google_id = user_info.get('sub')
+            normalized_email = email.lower()
             
             # [NEW] Check for existing user role conflicts
-            existing_user = User.query.filter_by(email=email).first()
-            if user_type == 'student':
-                normalized_email = (email or '').strip().lower()
+            existing_user = User.query.filter(
+                db.func.lower(User.email) == normalized_email
+            ).first()
+            student_record = Student.query.filter(
+                db.func.lower(Student.email) == normalized_email
+            ).first()
 
-                if existing_user and existing_user.role == UserRole.PROFESSOR:
-                    return None, "Professor accounts cannot be used for student submissions. Please use your personal Gmail account listed in the class record."
+            # Never allow a student account to be promoted to professor by login flow.
+            if existing_user and existing_user.role == UserRole.STUDENT and user_type == 'professor':
+                return None, "This Gmail is already registered as a student account. Please use Student Sign In instead of professor login."
 
             # Domain and Class Record validation logic
             if user_type == 'student':
                 if not email.endswith('@gmail.com'):
                     return None, "Only personal Gmail accounts (@gmail.com) are allowed for student submissions. Please use the Gmail account listed in the class record."
-                
+
                 # Check if this student email exists in ANY class record (Student table)
-                student_record = Student.query.filter_by(email=email).first()
                 if not student_record:
                     return None, f"This Gmail address ({email}) is not associated with any student in our class records. Please use the Gmail account listed in the class record."
-                
+
+                # Repair accidental professor-role accounts for student sign-in when safe.
+                if existing_user and existing_user.role == UserRole.PROFESSOR:
+                    if self._has_professor_owned_data(existing_user.id):
+                        return None, "This Gmail is already used by a professor account with existing records. Please use another Gmail for student submission or contact the administrator."
+                    existing_user.role = UserRole.STUDENT
                 # If found, mark as registered if not already
                 if not student_record.is_registered:
                     student_record.is_registered = True
                     student_record.registration_date = datetime.utcnow()
                     db.session.add(student_record)
                     # We commit below with User create/update
-            elif self.allowed_domains and self.allowed_domains != ['']:
-                domain = email.split('@')[1] if '@' in email else ''
-                allowed = [d.strip().lower() for d in self.allowed_domains if d.strip()]
-                
-                if domain not in allowed:
-                    return None, f"Email domain '{domain}' not allowed. Allowed domains: {', '.join(allowed)}"
+            else:
+                if student_record and (not existing_user or existing_user.role != UserRole.PROFESSOR):
+                    return None, "This Gmail is listed as a student account. Please use Student Sign In instead of professor login."
+
+                if self.allowed_domains and self.allowed_domains != ['']:
+                    domain = email.split('@')[1] if '@' in email else ''
+                    allowed = [d.strip().lower() for d in self.allowed_domains if d.strip()]
+
+                    if domain not in allowed:
+                        return None, f"Email domain '{domain}' not allowed. Allowed domains: {', '.join(allowed)}"
             
             role = UserRole.PROFESSOR if user_type == 'professor' else UserRole.STUDENT
             
             user = existing_user
             if not user:
                 user = User(
-                    email=email,
+                    email=normalized_email,
                     name=name,
                     google_id=google_id,
                     profile_picture=picture,
@@ -191,16 +234,13 @@ class AuthService:
                 )
                 db.session.add(user)
             else:
+                user.email = normalized_email
                 user.name = name
                 user.google_id = google_id
                 user.profile_picture = picture
                 user.last_login = datetime.utcnow()
-                # Ensure role is correct for the session if not already set (mostly for new student links)
-                if user.role != role and user_type == 'student':
-                     # We already handled Professor-as-Student above, 
-                     # this handles Student-as-Professor if we allowed it, 
-                     # but let's keep it safe.
-                     pass
+                if user_type == 'student':
+                    user.role = UserRole.STUDENT
             
             db.session.commit()
 

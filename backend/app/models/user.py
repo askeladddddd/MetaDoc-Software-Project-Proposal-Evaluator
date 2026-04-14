@@ -23,6 +23,7 @@ class User(BaseModel):
     # Relationships
     submissions = db.relationship('Submission', backref='professor', lazy=True)
     deadlines = db.relationship('Deadline', backref='professor', lazy=True)
+    sessions = db.relationship('UserSession', backref='user', lazy=True, cascade='all, delete-orphan', passive_deletes=True)
     
     def __repr__(self):
         return f'<User {self.email}>'
@@ -44,7 +45,7 @@ class UserSession(BaseModel):
     __tablename__ = 'user_sessions'
     
     session_token = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     ip_address = db.Column(db.String(45), nullable=True)
     user_agent = db.Column(db.String(500), nullable=True)

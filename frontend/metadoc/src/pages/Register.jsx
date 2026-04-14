@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { FileText, Shield, BarChart3, User, Mail, Lock, FolderOpen, ArrowRight, Search } from 'lucide-react';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
+import { authAPI } from '../services/api';
 import citLogo from '../assets/images/cit_logo.png';
 import metaDocLogo from '../assets/images/MainLogo.png';
 import '../styles/Register.css';
@@ -38,21 +39,11 @@ const Register = () => {
             if (formData.password.length < 6) throw new Error('Password must be at least 6 characters');
             if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
 
-            const response = await fetch('http://localhost:5000/api/v1/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password,
-                    name: formData.name
-                })
+            await authAPI.register({
+                email: formData.email,
+                password: formData.password,
+                name: formData.name
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Registration failed');
-            }
 
             // Show success message then redirect
             setSuccess(true);

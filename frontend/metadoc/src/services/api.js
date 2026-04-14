@@ -31,6 +31,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const requestUrl = String(error.config?.url || '');
+
+      if (requestUrl.includes('/auth/validate') || requestUrl.includes('/auth/profile')) {
+        return Promise.reject(error);
+      }
+
       // Unauthorized - clear token and redirect based on active auth flow
       const storedUserType = localStorage.getItem('user_type');
       const redirectAfterAuth = localStorage.getItem('redirect_after_auth') || '';
@@ -52,6 +58,8 @@ api.interceptors.response.use(
 export const authAPI = {
   initiateLogin: (userType = 'professor', provider = 'google') =>
     api.get('/auth/login', { params: { user_type: userType, provider: provider } }),
+  loginBasic: (data) => api.post('/auth/login-basic', data),
+  register: (data) => api.post('/auth/register', data),
   validateSession: (sessionToken) => api.post('/auth/validate', { session_token: sessionToken }),
   logout: (sessionToken) => api.post('/auth/logout', { session_token: sessionToken }),
   getProfile: () => api.get('/auth/profile'),
@@ -73,6 +81,7 @@ export const submissionAPI = {
   getStudentStatus: (token) => api.get(`/submission/student-status`, { params: { token } }),
   registerStudent: (data) => api.post('/submission/student-register', data),
   getStudentLinks: () => api.get('/submission/student-links'),
+  getGeneratedLinks: () => api.get('/submission/generated-links'),
 };
 
 // Dashboard API

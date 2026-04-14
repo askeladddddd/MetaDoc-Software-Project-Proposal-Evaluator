@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Shield, BarChart3, Mail, Lock, FolderOpen, ArrowRight, Search, X, ChevronLeft, Info } from 'lucide-react';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
-import citLogo from '../assets/images/cit_logo.png';
+import { authAPI } from '../services/api';
 import metaDocLogo from '../assets/images/MainLogo.png';
 import logo1Img from '../assets/images/Logo1.jpg';
 import logo2Img from '../assets/images/Logo2.jpg';
@@ -123,26 +123,19 @@ const Login = () => {
         throw new Error('Email and password are required');
       }
 
-      const response = await fetch('http://localhost:5000/api/v1/auth/login-basic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+      const response = await authAPI.loginBasic({
+        email: formData.email,
+        password: formData.password
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
+      const data = response.data;
 
       // Handle successful login
       setSuccess('✓ Login successful! Redirecting to dashboard...');
 
       setTimeout(() => {
         handleOAuthCallback(data.session_token, data.user);
+        navigate('/dashboard', { replace: true });
       }, 2000);
     } catch (err) {
       setError(err.message);
@@ -353,7 +346,6 @@ const Login = () => {
 
             <div className="login-footer">
               <div className="login-university-row">
-                <img src={citLogo} alt="CIT University" width={22} height={22} className="login-university-logo" />
                 <span>Cebu Institute of Technology - University</span>
               </div>
               <p className="text-sm">© 2025 MetaDoc. All rights reserved.</p>

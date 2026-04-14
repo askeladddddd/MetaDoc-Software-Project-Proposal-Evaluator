@@ -30,7 +30,7 @@ def init_extensions(app):
     # Configure CORS for frontend integration
     cors.init_app(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+            "origins": app.config.get('CORS_ORIGINS', ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]),
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True

@@ -16,7 +16,7 @@ class AnalysisResult(BaseModel):
     # Module 2: Metadata and Content Analysis
     document_metadata = db.Column(JSON, nullable=True)
     content_statistics = db.Column(JSON, nullable=True)
-    document_text = db.Column(db.Text(length=4294967295), nullable=True)
+    document_text = db.Column(db.Text, nullable=True)
     
     # Module 3: Rule-based Insights
     heuristic_insights = db.Column(JSON, nullable=True)

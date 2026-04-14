@@ -66,6 +66,8 @@ python run.py
 **Open NEW terminal** (keep backend running):
 
 ```bash
+# From repository root:
+# cd MetaDoc-Software-Project-Proposal-Evaluator
 cd frontend/metadoc
 
 npm install
@@ -115,6 +117,7 @@ DATABASE_URL=sqlite:///metadoc.db
 | **Port 5000 already in use** | Kill process: `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess \| Stop-Process` |
 | **pip install fails** | Try: `pip install --upgrade pip` then retry |
 | **Frontend won't load** | Make sure backend is running on port 5000 |
+| **Collaborative Effort Report fails** | Sign in as professor using Google OAuth (not basic login), and ensure file is a native Google Doc |
 
 ---
 

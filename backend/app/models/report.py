@@ -19,7 +19,7 @@ class ReportExport(BaseModel):
     submissions_included = db.Column(JSON, nullable=True)
     
     # User who requested export
-    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     
     # Export metadata
     download_count = db.Column(db.Integer, default=0)

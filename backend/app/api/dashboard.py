@@ -21,7 +21,7 @@ import os
 from app.core.extensions import db
 from app.models import (
     Submission, AnalysisResult, Deadline, User, DocumentSnapshot, AuditLog,
-    SubmissionStatus, TimelinessClassification, UserRole, Student
+    SubmissionStatus, TimelinessClassification, UserRole, Student, UserSession
 )
 from app.services.audit_service import AuditService
 from app.services import DashboardService, DriveService, SubmissionService
@@ -956,12 +956,21 @@ def get_contribution_report(submission_id):
             # Get professor's credentials
             user_creds_json = None
             session_obj = getattr(request, 'current_session', None)
-            if session_obj and session_obj.google_access_token:
+            oauth_session = session_obj
+
+            # Fallback: use latest persisted Google OAuth session for this professor.
+            if (not oauth_session) or (not getattr(oauth_session, 'google_access_token', None)):
+                oauth_session = UserSession.query.filter(
+                    UserSession.user_id == user.id,
+                    UserSession.google_access_token.isnot(None)
+                ).order_by(UserSession.created_at.desc()).first()
+
+            if oauth_session and oauth_session.google_access_token:
                 try:
                     import json
                     creds_dict = {
-                        "token": session_obj.google_access_token,
-                        "refresh_token": session_obj.google_refresh_token,
+                        "token": oauth_session.google_access_token,
+                        "refresh_token": oauth_session.google_refresh_token,
                         "token_uri": "https://oauth2.googleapis.com/token",
                         "client_id": current_app.config.get('GOOGLE_CLIENT_ID'),
                         "client_secret": current_app.config.get('GOOGLE_CLIENT_SECRET'),
@@ -970,6 +979,11 @@ def get_contribution_report(submission_id):
                     user_creds_json = json.dumps(creds_dict)
                 except Exception as cred_err:
                     current_app.logger.warning(f"Failed to prepare user credentials: {cred_err}")
+
+            if not user_creds_json:
+                return jsonify({
+                    'error': 'Google Drive permission setup required. Please sign out and sign in using Google professor login, then try again.'
+                }), 400
             
             current_app.logger.info(f"Analyzing Google Drive revision history for submission {submission_id}")
             quick_mode = str(request.args.get('quick', 'false')).lower() == 'true'

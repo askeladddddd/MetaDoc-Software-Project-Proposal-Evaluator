@@ -28,9 +28,12 @@ const ClassList = () => {
     const [subjectFilter, setSubjectFilter] = useState('All');
     const [showArchivedOnly, setShowArchivedOnly] = useState(false);
     const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
     const [modalError, setModalError] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     const [fullNameDrafts, setFullNameDrafts] = useState({});
+    const [rowBackups, setRowBackups] = useState({});
+    const [confirmModal, setConfirmModal] = useState(null);
 
     // Modal state
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -42,6 +45,7 @@ const ClassList = () => {
         last_name: '',
         first_name: '',
         course_year: '',
+        subject_no: '',
         email: '',
         team_code: ''
     });
@@ -66,13 +70,13 @@ const ClassList = () => {
     }, []);
 
     useEffect(() => {
-        if (error) {
+        if (successMessage) {
             const timer = setTimeout(() => {
-                setError(null);
-            }, 3000);
+                setSuccessMessage(null);
+            }, 6000);
             return () => clearTimeout(timer);
         }
-    }, [error]);
+    }, [successMessage]);
 
     const fetchStudents = async () => {
         try {
@@ -93,8 +97,10 @@ const ClassList = () => {
             }));
             setClassRows(mapped);
             setSelectedIds([]);
+            setRowBackups({});
         } catch (err) {
             console.error('Failed to fetch students:', err);
+            setError(err.response?.data?.error || 'Failed to load student records.');
         } finally {
             setLoading(false);
         }
@@ -191,8 +197,10 @@ const ClassList = () => {
 
             try {
                 setLoading(true);
+                setError(null);
                 await dashboardAPI.importDeadlineStudents(students);
-                fetchStudents();
+                await fetchStudents();
+                setSuccessMessage('Class list imported successfully.');
             } catch (err) {
                 console.error('Import failed:', err);
                 setError(err.response?.data?.error || 'Failed to import student record.');
@@ -208,6 +216,12 @@ const ClassList = () => {
         setSelectedIds(prev => {
             const isSelected = prev.includes(id);
             if (isSelected) {
+                setRowBackups(backups => {
+                    if (!(id in backups)) return backups;
+                    const next = { ...backups };
+                    delete next[id];
+                    return next;
+                });
                 setFullNameDrafts(drafts => {
                     if (!(id in drafts)) return drafts;
                     const next = { ...drafts };
@@ -216,6 +230,12 @@ const ClassList = () => {
                 });
                 return prev.filter(i => i !== id);
             }
+            setRowBackups(backups => {
+                if (id in backups) return backups;
+                const row = classRows.find(item => item.id === id);
+                if (!row) return backups;
+                return { ...backups, [id]: { ...row } };
+            });
             return [...prev, id];
         });
     };
@@ -297,7 +317,12 @@ const ClassList = () => {
         if (selectedIds.length === 0) return;
         try {
             setLoading(true);
+            setError(null);
+            setSuccessMessage(null);
             const errors = [];
+            const failedEmailRestores = [];
+            let savedCount = 0;
+
             for (const id of selectedIds) {
                 const row = classRows.find(r => r.id === id);
                 if (row) {
@@ -316,19 +341,42 @@ const ClassList = () => {
                             team_code: row.teamCode
                         };
                         await dashboardAPI.updateDeadlineStudent(row.id, updateData);
+                        savedCount += 1;
                     } catch (err) {
                         const message = err.response?.data?.error || 'Unknown error';
+                        const isEmailError = /email|gmail|invalid/i.test(message);
+                        if (isEmailError && rowBackups[id]?.email) {
+                            failedEmailRestores.push({ id, email: rowBackups[id].email });
+                        }
                         errors.push(`${row.studentId}: ${message}`);
                     }
                 }
             }
+
+            if (failedEmailRestores.length > 0) {
+                setClassRows(prev => prev.map(row => {
+                    const restored = failedEmailRestores.find((item) => item.id === row.id);
+                    if (!restored) return row;
+                    return { ...row, email: restored.email };
+                }));
+            }
+
             if (errors.length > 0) {
-                setError(`Failed to save some records (${errors.length}): ${errors.slice(0, 2).join(' | ')}`);
+                const restoreNote = failedEmailRestores.length > 0
+                    ? ' Invalid email edits were restored to the previous value.'
+                    : '';
+                setError(`Failed to save some records (${errors.length}): ${errors.slice(0, 2).join(' | ')}${restoreNote}`);
+                if (savedCount > 0) {
+                    setSuccessMessage(`${savedCount} student record(s) saved successfully.`);
+                }
             } else {
-                fetchStudents();
+                setSuccessMessage(`${savedCount} student record(s) saved successfully.`);
                 setSelectedIds([]);
                 setFullNameDrafts({});
+                setRowBackups({});
             }
+
+            await fetchStudents();
         } catch (err) {
             console.error('Bulk save error:', err);
             setError('An error occurred during save.');
@@ -337,11 +385,10 @@ const ClassList = () => {
         }
     };
 
-    const handleBulkDelete = async () => {
-        if (selectedIds.length === 0) return;
-        if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} selected student records?`)) return;
+    const executeBulkDelete = async () => {
         try {
             setLoading(true);
+            setError(null);
             const errors = [];
             for (const id of selectedIds) {
                 const student = classRows.find(r => r.id === id);
@@ -356,8 +403,11 @@ const ClassList = () => {
             if (errors.length > 0) {
                 setError(`Failed to delete some records: ${errors.length} errors occurred.`);
             }
-            fetchStudents();
+            await fetchStudents();
             setSelectedIds([]);
+            if (errors.length === 0) {
+                setSuccessMessage('Selected student records deleted successfully.');
+            }
         } catch (err) {
             console.error('Bulk delete error:', err);
             setError('An error occurred during bulk deletion.');
@@ -366,18 +416,16 @@ const ClassList = () => {
         }
     };
 
-    const handleBulkArchive = async () => {
-        if (selectedFilteredIds.length === 0) {
-            setError('Please select at least one student to restrict.');
-            return;
-        }
-        if (!window.confirm(`Restrict ${selectedFilteredIds.length} selected student(s)? Restricted students cannot submit files until access is restored.`)) return;
+    const executeBulkArchive = async () => {
         try {
             setLoading(true);
+            setError(null);
             await dashboardAPI.archiveStudents(selectedFilteredIds);
             setSelectedIds([]);
             setFullNameDrafts({});
-            fetchStudents();
+            setRowBackups({});
+            await fetchStudents();
+            setSuccessMessage('Selected students were restricted successfully.');
         } catch (err) {
             console.error('Bulk archive error:', err);
             setError(err.response?.data?.error || 'Failed to restrict selected students.');
@@ -386,24 +434,84 @@ const ClassList = () => {
         }
     };
 
-    const handleBulkUnarchive = async () => {
-        if (selectedFilteredIds.length === 0) {
-            setError('Please select at least one restricted student to undo.');
-            return;
-        }
-        if (!window.confirm(`Undo restriction for ${selectedFilteredIds.length} selected student(s)? They will regain submission access.`)) return;
+    const executeBulkUnarchive = async () => {
         try {
             setLoading(true);
+            setError(null);
             await dashboardAPI.unarchiveStudents(selectedFilteredIds);
             setSelectedIds([]);
             setFullNameDrafts({});
-            fetchStudents();
+            setRowBackups({});
+            await fetchStudents();
+            setSuccessMessage('Student restriction was removed successfully.');
         } catch (err) {
             console.error('Bulk unarchive error:', err);
             setError(err.response?.data?.error || 'Failed to undo restriction for selected students.');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleConfirmAction = async () => {
+        if (!confirmModal?.actionType) return;
+        const actionType = confirmModal.actionType;
+        setConfirmModal(null);
+
+        if (actionType === 'delete') {
+            await executeBulkDelete();
+            return;
+        }
+
+        if (actionType === 'archive') {
+            await executeBulkArchive();
+            return;
+        }
+
+        if (actionType === 'unarchive') {
+            await executeBulkUnarchive();
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedIds.length === 0) {
+            setError('Please select at least one student to delete.');
+            return;
+        }
+
+        setConfirmModal({
+            actionType: 'delete',
+            title: '',
+            description: 'do you want to delete this??',
+            confirmLabel: 'delete'
+        });
+    };
+
+    const handleBulkArchive = () => {
+        if (selectedFilteredIds.length === 0) {
+            setError('Please select at least one student to restrict.');
+            return;
+        }
+
+        setConfirmModal({
+            actionType: 'archive',
+            title: 'Restrict Students',
+            description: `Restrict ${selectedFilteredIds.length} selected student(s)? Restricted students cannot submit files until access is restored.`,
+            confirmLabel: 'Restrict'
+        });
+    };
+
+    const handleBulkUnarchive = () => {
+        if (selectedFilteredIds.length === 0) {
+            setError('Please select at least one restricted student to undo.');
+            return;
+        }
+
+        setConfirmModal({
+            actionType: 'unarchive',
+            title: 'Undo Restriction',
+            description: `Undo restriction for ${selectedFilteredIds.length} selected student(s)? They will regain submission access.`,
+            confirmLabel: 'Undo Restriction'
+        });
     };
 
     const handleOpenAddModal = () => {
@@ -415,6 +523,7 @@ const ClassList = () => {
             last_name: '',
             first_name: '',
             course_year: '',
+            subject_no: '',
             email: '',
             team_code: ''
         });
@@ -423,12 +532,43 @@ const ClassList = () => {
 
     const handleModalSubmit = async (e) => {
         e.preventDefault();
+        const normalizedFormData = {
+            student_id: formatStudentId(formData.student_id || ''),
+            first_name: (formData.first_name || '').trim(),
+            last_name: (formData.last_name || '').trim(),
+            course_year: (formData.course_year || '').trim(),
+            subject_no: (formData.subject_no || '').trim(),
+            team_code: (formData.team_code || '').trim(),
+            email: (formData.email || '').trim()
+        };
+
+        const requiredFields = [
+            { key: 'student_id', label: 'Student ID Number' },
+            { key: 'team_code', label: 'Team Code' },
+            { key: 'first_name', label: 'First Name' },
+            { key: 'last_name', label: 'Last Name' },
+            { key: 'course_year', label: 'Course & Year' },
+            { key: 'subject_no', label: 'Subject No.' },
+            { key: 'email', label: 'Email Address' }
+        ];
+
+        const missingLabels = requiredFields
+            .filter(({ key }) => !normalizedFormData[key])
+            .map(({ label }) => label);
+
+        if (missingLabels.length > 0) {
+            setModalError('Please fill in all the fields before adding student.');
+            return;
+        }
+
         try {
             setLoading(true);
             setModalError(null);
-            await dashboardAPI.addDeadlineStudent(formData);
+            setError(null);
+            await dashboardAPI.addDeadlineStudent(normalizedFormData);
             setIsModalOpen(false);
-            fetchStudents();
+            await fetchStudents();
+            setSuccessMessage(isEditing ? 'Student record updated successfully.' : 'Student record added successfully.');
         } catch (err) {
             console.error('Operation failed:', err);
             setModalError(err.response?.data?.error || 'Failed to process student record.');
@@ -514,6 +654,14 @@ const ClassList = () => {
                     </button>
                 </div>
             </div>
+
+            {successMessage && (
+                <div className="import-success-banner" role="status" aria-live="polite">
+                    <CheckCircle2 size={20} />
+                    <span>{successMessage}</span>
+                    <button className="error-close-btn success-close-btn" onClick={() => setSuccessMessage(null)}>×</button>
+                </div>
+            )}
 
             {error && (
                 <div className="import-error-banner">
@@ -608,7 +756,7 @@ const ClassList = () => {
                                         <th>COURSE & YEAR</th>
                                         <th>GMAIL</th>
                                         <th>TEAM CODE</th>
-                                        <th>STATUS</th>
+                                        <th className="status-column-header">STATUS</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -745,7 +893,7 @@ const ClassList = () => {
                                                         />
                                                     ) : row.teamCode}
                                                 </td>
-                                                <td>
+                                                <td className="status-column-cell">
                                                     <span className={`status-badge ${row.isArchived ? 'status-archived' : (row.status === 'Registered' || row.is_registered ? 'status-registered' : 'status-pending')}`}>
                                                         {row.isArchived ? 'Restricted' : (row.status || (row.is_registered ? 'Registered' : 'Pending'))}
                                                     </span>
@@ -796,6 +944,38 @@ const ClassList = () => {
                 </div>
             )}
 
+            {confirmModal && (
+                <div className="modal-overlay" onClick={() => !loading && setConfirmModal(null)}>
+                    <div className="modal-content confirm-action-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="confirm-action-icon-wrap">
+                            {confirmModal.actionType === 'delete' ? <Trash2 size={20} /> : <AlertCircle size={20} />}
+                        </div>
+                        {confirmModal.title ? <h3 className="confirm-action-title">{confirmModal.title}</h3> : null}
+                        <p className="confirm-action-desc">{confirmModal.description}</p>
+
+                        <div className="confirm-action-footer">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setConfirmModal(null)}
+                                disabled={loading}
+                            >
+                                cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={handleConfirmAction}
+                                disabled={loading}
+                                className={confirmModal.actionType === 'delete' ? 'confirm-danger-btn' : ''}
+                            >
+                                {loading ? 'Processing...' : confirmModal.confirmLabel}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Manual Student Add/Edit Modal */}
             {isModalOpen && (
                 <div className="modal-overlay">
@@ -812,7 +992,7 @@ const ClassList = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <form onSubmit={handleModalSubmit}>
+                        <form onSubmit={handleModalSubmit} noValidate>
                             {modalError && (
                                 <div className="modal-error-banner">
                                     <AlertCircle size={16} />
@@ -822,12 +1002,24 @@ const ClassList = () => {
                             <div className="form-group">
                                 <label>Student ID Number</label>
                                 <input
+                                    className="student-id-input"
                                     type="text"
                                     required
                                     placeholder="22-1686-452"
                                     value={formData.student_id}
                                     onChange={(e) => setFormData({ ...formData, student_id: formatStudentId(e.target.value) })}
                                 />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Team Code</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. TEAM-A"
+                                        value={formData.team_code}
+                                        onChange={(e) => setFormData({ ...formData, team_code: e.target.value })}
+                                    />
+                                </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
@@ -862,12 +1054,12 @@ const ClassList = () => {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Team Code</label>
+                                    <label>Subject No.</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. TEAM-A"
-                                        value={formData.team_code}
-                                        onChange={(e) => setFormData({ ...formData, team_code: e.target.value })}
+                                        placeholder="e.g. IT411"
+                                        value={formData.subject_no}
+                                        onChange={(e) => setFormData({ ...formData, subject_no: e.target.value })}
                                     />
                                 </div>
                             </div>

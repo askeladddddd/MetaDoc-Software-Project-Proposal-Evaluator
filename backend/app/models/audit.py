@@ -17,7 +17,7 @@ class AuditLog(BaseModel):
     user_agent = db.Column(db.String(500), nullable=True)
     
     # Associated entities
-    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     submission_id = db.Column(db.String(36), db.ForeignKey('submissions.id'), nullable=True)
     
     # Additional metadata

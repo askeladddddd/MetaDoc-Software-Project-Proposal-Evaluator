@@ -12,6 +12,7 @@ const OAuthCallback = () => {
   const [status, setStatus] = useState('processing'); // 'processing', 'success', 'error'
   const [message, setMessage] = useState('Completing authentication...');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClassListError, setIsClassListError] = useState(false);
   const processed = useRef(false);
 
   const handleStudentRefresh = () => {
@@ -46,6 +47,7 @@ const OAuthCallback = () => {
           const isClassRecordError = /class list|excel class list|not associated with any student/i.test(error);
           const errorDelay = isStudentFlow ? 30000 : 3000;
           setStatus('error');
+          setIsClassListError(isClassRecordError);
           setMessage(
             isClassRecordError
               ? 'This account is not listed in the class list. Please sign in again using the Gmail account registered in the class list. Or try to contact your professor to update this.'
@@ -57,6 +59,7 @@ const OAuthCallback = () => {
 
         if (!sessionToken || !userParam) {
           setStatus('error');
+          setIsClassListError(false);
           setMessage('Invalid authentication response');
           setTimeout(() => navigate(fallbackLoginPath), isStudentFlow ? 30000 : 3000);
           return;
@@ -89,6 +92,7 @@ const OAuthCallback = () => {
       } catch (error) {
         console.error('OAuth callback error:', error);
         setStatus('error');
+        setIsClassListError(false);
         setMessage('An error occurred during authentication');
         const storedUserType = localStorage.getItem('user_type');
         const isStudent = storedUserType === 'student';
@@ -100,9 +104,9 @@ const OAuthCallback = () => {
   }, [searchParams, navigate, handleOAuthCallback]);
 
   return (
-    <div className="oauth-callback-page">
+    <div className={`oauth-callback-page ${status === 'error' && isClassListError ? 'oauth-callback-page-class-list-error' : ''}`}>
       <div className="callback-container">
-        <Card className="callback-card-content">
+        <Card className={`callback-card-content ${status === 'error' && isClassListError ? 'callback-card-class-list-error' : ''}`}>
           <div className="text-center">
             {status === 'processing' && (
               <>
@@ -122,9 +126,11 @@ const OAuthCallback = () => {
 
             {status === 'error' && (
               <>
-                <XCircle size={64} className="callback-icon error" />
+                <div className="callback-icon-shell">
+                  <XCircle size={36} className="callback-icon error" />
+                </div>
                 <h2>Authentication Failed</h2>
-                <p>{message}</p>
+                <p className="callback-error-message">{message}</p>
                 <p className="redirect-text">Redirecting to sign in...</p>
                 <button
                   type="button"

@@ -7,15 +7,31 @@ except ImportError:
     # Optional: warn that python-dotenv is not installed
     pass
 
+
+def _normalize_database_url(database_url):
+    if not database_url:
+        return None
+
+    if database_url.startswith('postgres://'):
+        return database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+
+    if database_url.startswith('postgresql://'):
+        return database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+
+    return database_url
+
+
+def _split_csv(value, default_value):
+    source = value or default_value
+    return [item.strip() for item in source.split(',') if item.strip()]
+
 # Get backend directory path
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Configure database URL
-_DB_URL = os.environ.get('DATABASE_URL')
+_DB_URL = _normalize_database_url(os.environ.get('DATABASE_URL'))
 if not _DB_URL:
-    # Default to SQLite in backend directory with absolute path
-    _db_path = os.path.join(_BACKEND_DIR, 'metadoc.db')
-    _DB_URL = f'sqlite:///{_db_path}'
+    raise RuntimeError('DATABASE_URL is required. Set it to your PostgreSQL connection string.')
 
 class Config:
     """Base configuration class"""
@@ -88,6 +104,10 @@ class Config:
     # Logging Configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
     LOG_FILE = os.environ.get('LOG_FILE') or './logs/metadoc.log'
+    CORS_ORIGINS = _split_csv(
+        os.environ.get('CORS_ORIGINS'),
+        os.environ.get('FRONTEND_ORIGIN', 'http://localhost:3000,http://localhost:5173,http://localhost:5174')
+    )
 
 class DevelopmentConfig(Config):
     """Development configuration"""
@@ -109,7 +129,7 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     """Testing configuration"""
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or Config.SQLALCHEMY_DATABASE_URI
     WTF_CSRF_ENABLED = False
 
 # Configuration mapping

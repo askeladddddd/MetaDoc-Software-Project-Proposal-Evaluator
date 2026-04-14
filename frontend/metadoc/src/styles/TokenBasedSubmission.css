@@ -718,3 +718,594 @@
     max-width: 140px;
   }
 }
+
+/* Restored submission portal UI */
+.submit-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--color-maroon-dark) 0%, var(--color-maroon) 50%, var(--color-maroon-light) 100%);
+  padding: clamp(12px, 2.2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.submit-workspace {
+  width: min(860px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: clamp(12px, 2.2vh, 28px);
+  zoom: 0.9;
+}
+
+.submit-page-title-block {
+  text-align: center;
+}
+
+.submit-page-title {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2rem, 3.2vw, 2.7rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.26);
+}
+
+.submit-section-card {
+  position: relative;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+  background-color: rgba(255, 255, 255, 0.94);
+  overflow: hidden;
+}
+
+.submit-section-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('../assets/images/Logo4.jpg');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.submit-section-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.submit-section-card .card-content {
+  padding: 1rem 1.15rem;
+}
+
+.file-like-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.deliverable-heading {
+  margin: 0 0 0.25rem;
+  font-size: 1.22rem;
+  font-weight: 800;
+  color: var(--color-maroon-dark);
+}
+
+.section-card-title {
+  margin: 0 0 0.7rem;
+  color: var(--color-maroon-dark);
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.student-kicker {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gray-500);
+  font-weight: 700;
+}
+
+.student-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(128, 0, 32, 0.1);
+  border-radius: 12px;
+  background: rgba(128, 0, 32, 0.03);
+}
+
+.student-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.student-grid-label {
+  font-size: 0.72rem;
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.student-grid-value {
+  font-size: 0.91rem;
+  color: var(--color-maroon-dark);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.student-grid-value-email {
+  overflow-wrap: anywhere;
+}
+
+.submission-theme {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--color-maroon-dark) 0%, var(--color-maroon) 50%, var(--color-maroon-light) 100%);
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.submission-auth-failure-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: #ffffff;
+}
+
+.submission-auth-failure-card {
+  width: min(360px, 92vw);
+  text-align: center;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 28px rgba(15, 23, 42, 0.06);
+  padding: 2rem 1.85rem 1.8rem !important;
+}
+
+.submission-auth-failure-card .card-content {
+  padding: 0;
+}
+
+.submission-auth-failure-icon-shell {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: #fff3f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.08);
+}
+
+.submission-auth-failure-icon {
+  color: #ef4444;
+}
+
+.submission-auth-failure-title {
+  margin: 0 0 0.3rem;
+  color: #7f1d1d;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.submission-auth-failure-message {
+  margin: 0;
+  color: #475569;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.submission-auth-failure-redirect {
+  margin: 1rem 0 0;
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.submission-auth-failure-button {
+  margin-top: 0.85rem;
+  min-width: 96px;
+  padding: 0.72rem 1.1rem;
+  border-radius: 18px;
+  box-shadow: 0 10px 20px rgba(125, 23, 38, 0.2);
+}
+
+.submission-sign-message {
+  margin: 0 0 0.9rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.submission-theme .subtitle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  margin: 0;
+}
+
+.submission-login-card {
+  width: min(420px, 92vw);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 18px 44px rgba(20, 10, 15, 0.28);
+  background: rgba(248, 248, 250, 0.98);
+}
+
+.submission-login-card .card-content {
+  padding: 1.9rem 1.7rem 1.45rem;
+}
+
+.logo-only-card {
+  width: min(320px, 92vw);
+  border-radius: 24px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  transition: transform 0.2s ease;
+}
+
+.logo-only-card .card-content {
+  padding: 0;
+}
+
+.logo-only-card:hover,
+.logo-only-card:focus-within {
+  transform: translateY(-1px);
+}
+
+.oauth-logo-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.oauth-logo-button {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 22px;
+}
+
+.oauth-logo-orb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  transition: transform 0.18s ease, outline-color 0.18s ease, box-shadow 0.18s ease;
+  overflow: hidden;
+}
+
+.oauth-logo-image {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: none;
+  display: block;
+}
+
+.oauth-logo-button:disabled .oauth-logo-orb {
+  opacity: 0.72;
+  transform: none;
+}
+
+.logo-only-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(75, 32, 32, 0.9);
+  text-align: center;
+}
+
+.logo-hover-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: -2.35rem;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(255, 255, 255, 0.98);
+  color: #5a1212;
+  border: 1px solid rgba(90, 18, 18, 0.24);
+  border-radius: 7px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 6;
+  box-shadow: 0 8px 14px rgba(24, 8, 8, 0.22);
+}
+
+.logo-hover-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.98);
+}
+
+.oauth-logo-button:hover .logo-hover-tooltip,
+.oauth-logo-button:focus-visible .logo-hover-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.university-footer-with-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.university-footer-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+
+.university-footer-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.university-footer-version {
+  font-size: 0.75rem;
+  color: var(--color-gray-500);
+  margin-top: 0.15rem;
+}
+
+.submission-footer-brand {
+  margin-top: 1.15rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(128, 0, 32, 0.12);
+}
+
+.submission-footer-outside {
+  margin-top: 1rem;
+  padding-top: 0;
+  border-top: none;
+  opacity: 0.95;
+}
+
+.submit-page .submission-footer-outside {
+  margin-top: 0.9rem;
+  width: min(860px, 100%);
+  justify-content: center;
+  gap: 0;
+  opacity: 1;
+}
+
+.submit-page .submission-footer-outside .university-footer-stack span {
+  color: #9ca3af;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.submit-page .submission-footer-outside .university-footer-version {
+  color: #7f8a9a;
+  font-size: 0.84rem;
+  margin-top: 0.06rem;
+}
+
+.unauthorized-access-modal {
+  width: min(560px, 92vw);
+  max-width: 560px;
+  border-top: 4px solid var(--color-error);
+  border-radius: 14px;
+}
+
+.unauthorized-access-modal .modal-header {
+  padding: 1.1rem 1.2rem;
+}
+
+.unauthorized-access-modal .modal-title {
+  font-size: 1.15rem;
+}
+
+.unauthorized-access-modal .modal-body {
+  padding: 1.05rem 1.2rem 1.15rem;
+}
+
+.unauthorized-access-modal .modal-footer {
+  justify-content: center;
+  padding: 0.9rem 1.2rem 1rem;
+}
+
+.unauthorized-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.unauthorized-modal-lead {
+  margin: 0;
+  color: var(--color-gray-800);
+  line-height: 1.65;
+  font-weight: 600;
+}
+
+.unauthorized-modal-text {
+  margin: 0;
+  color: var(--color-gray-700);
+  line-height: 1.65;
+}
+
+.unauthorized-modal-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--color-gray-700);
+  line-height: 1.65;
+}
+
+.unauthorized-modal-steps li + li {
+  margin-top: 0.3rem;
+}
+
+.student-info-card .submission-context {
+  margin-top: 0;
+}
+
+.deliverable-card .deadline-title {
+  margin-top: 0;
+}
+
+.drive-submit-card .submission-drive-header {
+  margin-bottom: 0.7rem;
+}
+
+.drive-submit-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.submission-processing-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.submission-processing-card {
+  width: min(320px, 90%);
+  border-radius: 18px;
+  padding: 1.25rem 1.1rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(128, 0, 32, 0.12);
+  box-shadow: 0 14px 36px rgba(69, 7, 22, 0.16);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.submission-processing-spinner {
+  color: var(--color-maroon);
+  animation: spin 1s linear infinite;
+}
+
+.submission-processing-title {
+  margin: 0;
+  color: var(--color-maroon-dark);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.submission-processing-text {
+  margin: 0;
+  color: var(--color-gray-600);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.drive-submit-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.submit-analysis-inline {
+  margin-top: 0;
+  min-height: 42px;
+  padding-inline: 1rem;
+  white-space: nowrap;
+}
+
+.submit-analysis-icon-only {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drive-submit-card[aria-busy='true'] .drive-submit-inline,
+.drive-submit-card[aria-busy='true'] .submission-drive-header,
+.drive-submit-card[aria-busy='true'] .alert {
+  filter: blur(0.4px);
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .submit-page {
+    padding: var(--spacing-md);
+  }
+
+  .submit-page-title {
+    font-size: 1.6rem;
+  }
+
+  .submit-workspace {
+    gap: 0.65rem;
+    zoom: 1;
+  }
+
+  .student-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drive-submit-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .submit-analysis-inline {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .submit-page-title {
+    font-size: 1.34rem;
+  }
+}

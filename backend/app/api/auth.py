@@ -128,13 +128,17 @@ def validate_session():
         
         if error:
             return jsonify({'valid': False, 'error': error}), 401
+
+        session_obj = result.get('session')
+        expires_at = getattr(session_obj, 'expires_at', None)
+        created_at = getattr(session_obj, 'created_at', None)
         
         return jsonify({
             'valid': True,
             'user': UserDTO.serialize(result['user']),
             'session_info': {
-                'expires_at': result['session']['expires_at'].isoformat(),
-                'created_at': result['session']['created_at'].isoformat()
+                'expires_at': expires_at.isoformat() if expires_at else None,
+                'created_at': created_at.isoformat() if created_at else None
             }
         })
         
@@ -264,9 +268,36 @@ def generate_submission_token():
             current_app.logger.warning(f"Failed to cleanup expired tokens: {cleanup_err}")
             db.session.rollback()
 
-        # Generate submission token (valid for 30 days)
+        # Replace old active token for the same deliverable when generating again.
+        try:
+            from app.models import SubmissionToken
+            existing_query = SubmissionToken.query.filter(
+                SubmissionToken.professor_id == user.id,
+                SubmissionToken.is_active == True,
+                SubmissionToken.expires_at > datetime.utcnow()
+            )
+            if deadline_id:
+                existing_query = existing_query.filter(SubmissionToken.deadline_id == deadline_id)
+            else:
+                existing_query = existing_query.filter(SubmissionToken.deadline_id.is_(None))
+
+            replaced_count = existing_query.update({'is_active': False}, synchronize_session=False)
+            if replaced_count > 0:
+                db.session.commit()
+                current_app.logger.info(
+                    f"Deactivated {replaced_count} existing active token(s) for professor={user.id}, deadline={deadline_id}"
+                )
+        except Exception as replace_err:
+            current_app.logger.warning(f"Failed to deactivate existing tokens before regeneration: {replace_err}")
+            db.session.rollback()
+
+        # Generate submission token with expiry aligned to the selected deliverable deadline.
         submission_token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=30)
+        if deadline_id and deadline:
+            expires_at = deadline.deadline_datetime
+        else:
+            # Fallback for legacy callers without a linked deliverable.
+            expires_at = datetime.utcnow() + timedelta(days=30)
         
         # Store token with deadline link
         from app.models import SubmissionToken
@@ -309,6 +340,7 @@ def generate_submission_token():
         
         return jsonify({
             'token': submission_token,
+            'generated_at': token_record.created_at.isoformat() if token_record.created_at else datetime.utcnow().isoformat(),
             'expires_at': expires_at.isoformat(),
             'deadline': deadline_info,
             'submission_url': f"{current_app.config.get('FRONTEND_URL', 'http://localhost:5173')}/submit?token={submission_token}"
@@ -418,6 +450,11 @@ def login_basic():
         if not user:
             AuditService.log_authentication_event('login_attempt', email, False, 'User not found')
             return jsonify({'error': 'Invalid email or password'}), 401
+
+        # Block student accounts from using professor basic login.
+        if user.role == UserRole.STUDENT:
+            AuditService.log_authentication_event('login_attempt', email, False, 'Student account attempted professor login')
+            return jsonify({'error': 'Unauthorized access. This Gmail is a student account. Please use Student Sign In.'}), 403
         
         # Check if user has password (might be OAuth-only user)
         if not user.password_hash:

@@ -12,7 +12,7 @@ import pytz
 from app.core.extensions import db
 from app.models import (
     Submission, AnalysisResult, Deadline, DocumentSnapshot,
-    SubmissionStatus, TimelinessClassification, Student
+    SubmissionStatus, TimelinessClassification, Student, SubmissionToken, User, UserRole
 )
 
 
@@ -30,6 +30,28 @@ class DashboardService:
 
     def _normalize_full_name(self, first_name, last_name):
         return f"{self._normalize_lower(first_name)} {self._normalize_lower(last_name)}".strip()
+
+    def _is_professor_email(self, email):
+        """Return True when email belongs to a professor account with owned professor data."""
+        email_norm = self._normalize_lower(email)
+        if not email_norm:
+            return False
+
+        user = User.query.filter(
+            db.func.lower(User.email) == email_norm,
+            User.role == UserRole.PROFESSOR
+        ).first()
+
+        if not user:
+            return False
+
+        has_professor_data = (
+            Deadline.query.filter_by(professor_id=user.id).first() is not None
+            or SubmissionToken.query.filter_by(professor_id=user.id).first() is not None
+            or Submission.query.filter_by(professor_id=user.id).first() is not None
+        )
+
+        return has_professor_data
 
     def _validate_student_uniqueness(self, user_id, student_id, first_name, last_name, email=None, exclude_id=None):
         """Validate uniqueness per professor for student_id, full name, and email."""
@@ -411,14 +433,25 @@ class DashboardService:
                 deadline.title = deadline_data['title']
             if 'description' in deadline_data:
                 deadline.description = deadline_data['description']
+
+            new_deadline_datetime = None
             if 'deadline_datetime' in deadline_data:
-                deadline.deadline_datetime = datetime.fromisoformat(deadline_data['deadline_datetime'])
+                new_deadline_datetime = datetime.fromisoformat(deadline_data['deadline_datetime'])
+                deadline.deadline_datetime = new_deadline_datetime
             if 'timezone' in deadline_data:
                 deadline.timezone = deadline_data['timezone']
             if 'course_code' in deadline_data:
                 deadline.course_code = deadline_data['course_code']
             if 'assignment_type' in deadline_data:
                 deadline.assignment_type = deadline_data['assignment_type']
+
+            # Keep generated link expiry aligned with the edited deliverable deadline.
+            if new_deadline_datetime is not None:
+                SubmissionToken.query.filter(
+                    SubmissionToken.professor_id == user_id,
+                    SubmissionToken.deadline_id == deadline.id,
+                    SubmissionToken.is_active == True
+                ).update({'expires_at': new_deadline_datetime}, synchronize_session=False)
             
             db.session.commit()
             
@@ -628,10 +661,26 @@ class DashboardService:
             student_id = self._normalize_text(student_data.get('student_id'))
             first_name = self._normalize_text(student_data.get('first_name'))
             last_name = self._normalize_text(student_data.get('last_name'))
+            course_year = self._normalize_text(student_data.get('course_year'))
+            subject_no = self._normalize_text(student_data.get('subject_no'))
+            team_code = self._normalize_text(student_data.get('team_code'))
             email = self._normalize_lower(student_data.get('email'))
 
-            if not student_id:
-                return None, "Student ID is required"
+            required_values = {
+                'Student ID Number': student_id,
+                'First Name': first_name,
+                'Last Name': last_name,
+                'Course & Year': course_year,
+                'Subject No.': subject_no,
+                'Team Code': team_code,
+                'Email Address': email
+            }
+            missing_fields = [label for label, value in required_values.items() if not value]
+            if missing_fields:
+                return None, "Please fill in all the fields before adding student."
+
+            if self._is_professor_email(email):
+                return None, "This Gmail is already used by a professor account. Please use a different student Gmail."
 
             uniqueness_error = self._validate_student_uniqueness(
                 user_id=user_id,
@@ -648,9 +697,9 @@ class DashboardService:
                 last_name=last_name,
                 first_name=first_name,
                 email=email,
-                course_year=student_data.get('course_year'),
-                team_code=student_data.get('team_code'),
-                subject_no=student_data.get('subject_no'),
+                course_year=course_year,
+                team_code=team_code,
+                subject_no=subject_no,
                 professor_id=user_id,
                 is_registered=False
             )
@@ -678,6 +727,9 @@ class DashboardService:
             new_first = self._normalize_text(student_data.get('first_name', student.first_name))
             new_last = self._normalize_text(student_data.get('last_name', student.last_name))
             new_email = self._normalize_lower(student_data.get('email', student.email))
+
+            if self._is_professor_email(new_email):
+                return None, "This Gmail is already used by a professor account. Please use a different student Gmail."
 
             uniqueness_error = self._validate_student_uniqueness(
                 user_id=user_id,

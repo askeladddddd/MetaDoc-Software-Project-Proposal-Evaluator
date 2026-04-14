@@ -36,12 +36,24 @@ const DashboardLayout = ({ children }) => {
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [activeFaqIndex, setActiveFaqIndex] = useState(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(() => {
     const saved = localStorage.getItem('sidebar-hidden-all-pages');
     return saved ? JSON.parse(saved) : false;
   });
+
+  const userDisplayName = user?.name || 'Professor';
+  const userEmail = user?.email || '';
+  const userInitials = userDisplayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || 'P';
+  const hasProfilePhoto = Boolean(user?.profile_picture) && !avatarLoadFailed;
 
   const isSpecialPage = location.pathname.includes('/reports') || 
                         location.pathname.includes('/dashboard/class-list') || 
@@ -143,6 +155,10 @@ const DashboardLayout = ({ children }) => {
     }
   }, [sidebarHidden, isSpecialPage]);
 
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.profile_picture]);
+
   const toggleSidebar = () => {
     if (isSpecialPage) {
       setSidebarHidden(!sidebarHidden);
@@ -200,7 +216,7 @@ const DashboardLayout = ({ children }) => {
             }}
           >
             <CircleHelp size={20} />
-            <span>Instruction</span>
+            <span>Instructions</span>
           </button>
         </nav>
 
@@ -245,7 +261,7 @@ const DashboardLayout = ({ children }) => {
             onClick={() => {
               setShowInstructionModal(true);
             }}
-            title="Instruction"
+            title="Instructions"
           >
             <CircleHelp size={20} />
           </button>
@@ -286,16 +302,26 @@ const DashboardLayout = ({ children }) => {
           </div>
 
           <div className="topbar-right">
-            <div className="user-badge">
+            <button
+              type="button"
+              className="user-badge user-badge-clickable"
+              onClick={() => setShowProfileModal(true)}
+              title="View profile"
+            >
               <div className="user-avatar-small">
-                {user?.profile_picture ? (
-                  <img src={user.profile_picture} alt={user.name} />
+                {hasProfilePhoto ? (
+                  <img
+                    src={user.profile_picture}
+                    alt={userDisplayName}
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarLoadFailed(true)}
+                  />
                 ) : (
-                  <User size={16} />
+                  <span className="user-avatar-initials">{userInitials}</span>
                 )}
               </div>
-              <span className="user-name-small">{user?.name}</span>
-            </div>
+              <span className="user-name-small">{userDisplayName}</span>
+            </button>
           </div>
         </header>
 
@@ -309,6 +335,43 @@ const DashboardLayout = ({ children }) => {
           className="sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
         ></div>
+      )}
+
+      {showProfileModal && (
+        <div
+          className="profile-modal-overlay"
+          onClick={() => setShowProfileModal(false)}
+        >
+          <div
+            className="profile-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="profile-modal-close"
+              onClick={() => setShowProfileModal(false)}
+              aria-label="Close profile preview"
+            >
+              <X size={20} />
+            </button>
+
+            {hasProfilePhoto ? (
+              <img
+                src={user?.profile_picture}
+                alt={`${userDisplayName} profile`}
+                className="profile-modal-image"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="profile-modal-avatar-fallback" aria-hidden="true">
+                {userInitials}
+              </div>
+            )}
+
+            <p className="profile-modal-name">{userDisplayName}</p>
+            {userEmail && <p className="profile-modal-email">{userEmail}</p>}
+          </div>
+        </div>
       )}
 
       {showTeamModal && (

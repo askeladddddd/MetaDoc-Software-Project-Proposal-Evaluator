@@ -35,7 +35,7 @@ class Submission(BaseModel):
     error_message = db.Column(Text, nullable=True)
     
     # Foreign keys
-    professor_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
+    professor_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     deadline_id = db.Column(db.String(36), db.ForeignKey('deadlines.id', ondelete='CASCADE'), nullable=True)
     
     # Relationships
@@ -131,7 +131,7 @@ class SubmissionToken(BaseModel):
     __tablename__ = 'submission_tokens'
     
     token = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    professor_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    professor_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     usage_count = db.Column(db.Integer, default=0)

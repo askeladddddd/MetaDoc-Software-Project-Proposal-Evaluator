@@ -27,7 +27,7 @@ import magic
 import uuid
 
 from app.core.extensions import db
-from app.models import Submission, SubmissionToken, SubmissionStatus, Deadline
+from app.models import Submission, SubmissionToken, SubmissionStatus, Deadline, UserRole
 from app.services.audit_service import AuditService
 from app.services import SubmissionService, DriveService
 from app.api.auth import get_auth_service
@@ -164,17 +164,11 @@ def get_student_status():
         if not deadline_id:
             return jsonify({'error': 'Invalid deadline associated with token'}), 400
             
-        from app.models import Student, UserRole
+        from app.models import Student
         user = request.current_user
         user_email = (user.email or '').strip().lower()
-        
-        # Check if the user is a professor viewing their own (or another) submission link
-        if user.role == UserRole.PROFESSOR or user.role == "professor":
-            return jsonify({
-                'is_registered': False,
-                'is_professor': True,
-                'message': 'You are currently logged in as a Professor.'
-            }), 200
+        role_value = str(getattr(user, 'role', '') or '').lower()
+        is_professor_user = role_value in {UserRole.PROFESSOR.value, 'professor'}
 
         if not user_email:
             return jsonify({
@@ -210,12 +204,14 @@ def get_student_status():
                 'first_name': student.first_name,
                 'course_year': student.course_year,
                 'team_code': student.team_code,
+                'subject_no': getattr(student, 'subject_no', None),
                 'email': student.email,
                 'name': f"{student.first_name} {student.last_name}".strip()
             }), 200
         else:
             return jsonify({
                 'is_registered': False,
+                'is_professor': is_professor_user,
                 'message': 'Account not authorized. Your Gmail account is not in the class record.'
             }), 200
             
@@ -224,6 +220,7 @@ def get_student_status():
         current_app.logger.error(f"Student status error: {e}")
         return jsonify({
             'is_registered': False,
+            'is_professor': False,
             'error': 'Failed to check registration status',
             'message': 'Unable to verify if your Gmail account is included in the class record right now. Please try again.'
         }), 200
@@ -356,6 +353,45 @@ def get_student_links():
         current_app.logger.error(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
+
+@submission_bp.route('/generated-links', methods=['GET'])
+@require_authentication()
+def get_generated_links():
+    """Get active generated submission links for the logged-in professor."""
+    try:
+        user = request.current_user
+        role_value = user.role.value if hasattr(user.role, 'value') else str(user.role).lower()
+        if role_value != UserRole.PROFESSOR.value:
+            return jsonify({'error': 'Only professors can view generated links'}), 403
+
+        tokens = SubmissionToken.query.filter(
+            SubmissionToken.professor_id == user.id,
+            SubmissionToken.is_active == True,
+            SubmissionToken.expires_at > datetime.utcnow()
+        ).order_by(SubmissionToken.created_at.desc()).all()
+
+        deadline_ids = [t.deadline_id for t in tokens if getattr(t, 'deadline_id', None)]
+        deadlines = Deadline.query.filter(Deadline.id.in_(deadline_ids)).all() if deadline_ids else []
+        deadline_map = {deadline.id: deadline for deadline in deadlines}
+
+        frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5173')
+        links = []
+        for token in tokens:
+            deadline = deadline_map.get(getattr(token, 'deadline_id', None))
+            links.append({
+                'deadline_id': getattr(token, 'deadline_id', None),
+                'title': deadline.title if deadline else 'Untitled Deliverable',
+                'token': token.token,
+                'url': f"{frontend_url}/submit?token={token.token}",
+                'expires_at': token.expires_at.isoformat() if token.expires_at else None,
+                'generated_at': token.created_at.isoformat() if token.created_at else None,
+            })
+
+        return jsonify({'links': links}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching generated links: {e}")
+        return jsonify({'error': 'Failed to fetch generated links'}), 500
+
 @submission_bp.route('/upload', methods=['POST'])
 @require_authentication()
 def upload_file():
@@ -379,28 +415,28 @@ def upload_file():
         # Use deadline from token (if column exists)
         deadline_id = getattr(token_record, 'deadline_id', None)
         
-        # Verify student registration if user is a student
-        from app.models import UserRole, Student
+        # Verify current account against the class record for this submission link.
+        from app.models import Student
         user = request.current_user
         
         student_id = request.form.get('student_id', '').strip()
         student_name = request.form.get('student_name', '').strip()
         semester = resolve_submission_semester()
 
-        if user.role == UserRole.STUDENT:
-            student = Student.query.filter(
-                Student.professor_id == professor_id,
-                db.func.lower(Student.email) == user.email.lower()
-            ).first()
-            if not student:
-                return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+        normalized_user_email = (user.email or '').strip().lower()
+        student = Student.query.filter(
+            Student.professor_id == professor_id,
+            db.func.lower(Student.email) == normalized_user_email
+        ).first()
+        if not student:
+            return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
 
-            if student.is_archived:
-                return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
-            
-            # Override with official class record info
-            student_id = student.student_id
-            student_name = f"{student.first_name} {student.last_name}"
+        if student.is_archived:
+            return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
+        
+        # Override with official class record info
+        student_id = student.student_id
+        student_name = f"{student.first_name} {student.last_name}"
         
         # Validate request
         if 'file' not in request.files:
@@ -675,8 +711,8 @@ def submit_drive_link():
         # Use deadline from token (if column exists)
         deadline_id = getattr(token_record, 'deadline_id', None)
         
-        # Verify student registration if user is a student
-        from app.models import UserRole, Student
+        # Verify current account against the class record for this submission link.
+        from app.models import Student
         user = request.current_user
         
         drive_link = data['drive_link'].strip()
@@ -684,20 +720,20 @@ def submit_drive_link():
         student_name = data.get('student_name', '').strip()
         semester = resolve_submission_semester()
 
-        if user.role == UserRole.STUDENT:
-            student = Student.query.filter(
-                Student.professor_id == professor_id,
-                db.func.lower(Student.email) == user.email.lower()
-            ).first()
-            if not student:
-                return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+        normalized_user_email = (user.email or '').strip().lower()
+        student = Student.query.filter(
+            Student.professor_id == professor_id,
+            db.func.lower(Student.email) == normalized_user_email
+        ).first()
+        if not student:
+            return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
 
-            if student.is_archived:
-                return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
-            
-            # Override with official class record info
-            student_id = student.student_id
-            student_name = f"{student.first_name} {student.last_name}"
+        if student.is_archived:
+            return jsonify({'error': 'Submission denied. Your account is restricted and cannot submit files.'}), 403
+        
+        # Override with official class record info
+        student_id = student.student_id
+        student_name = f"{student.first_name} {student.last_name}"
         
         # Validate drive link format
         file_id, validation_error = submission_service.validate_drive_link(drive_link)

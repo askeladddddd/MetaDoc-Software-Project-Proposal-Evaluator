@@ -20,30 +20,45 @@ export const AuthProvider = ({ children }) => {
     // Check for existing session on mount
     const token = localStorage.getItem('session_token');
     const savedUser = localStorage.getItem('user');
+    let storedUser = null;
 
     if (token && savedUser) {
       setSessionToken(token);
-      setUser(JSON.parse(savedUser));
-      setLoading(false);
-      // Optional: validate session in background without blocking
-      // validateSession(token);
+      try {
+        storedUser = JSON.parse(savedUser);
+        setUser(storedUser);
+      } catch {
+        localStorage.removeItem('user');
+      }
+      // Validate and refresh user data (including profile_picture) from backend.
+      validateSession(token, storedUser);
     } else {
       setLoading(false);
     }
   }, []);
 
-  const validateSession = async (token) => {
+  const validateSession = async (token, fallbackUser = null) => {
     try {
       const response = await authAPI.validateSession(token);
       if (response.data.valid) {
         setUser(response.data.user);
         setSessionToken(token);
       } else {
-        logout();
+        if (fallbackUser) {
+          setUser(fallbackUser);
+          setSessionToken(token);
+        } else {
+          logout();
+        }
       }
     } catch (error) {
       console.error('Session validation failed:', error);
-      logout();
+      if (fallbackUser) {
+        setUser(fallbackUser);
+        setSessionToken(token);
+      } else {
+        logout();
+      }
     } finally {
       setLoading(false);
     }

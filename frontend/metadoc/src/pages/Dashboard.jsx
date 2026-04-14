@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { dashboardAPI, authAPI } from '../services/api';
+import { dashboardAPI, authAPI, submissionAPI } from '../services/api';
 import {
   FileText,
   Clock,
@@ -117,6 +117,7 @@ const Dashboard = () => {
   useEffect(() => {
     fetchOverview();
     fetchDeadlines();
+    fetchGeneratedLinks();
   }, []);
 
   useEffect(() => {
@@ -154,6 +155,17 @@ const Dashboard = () => {
     }
   };
 
+  const fetchGeneratedLinks = async () => {
+    try {
+      const response = await submissionAPI.getGeneratedLinks();
+      const links = Array.isArray(response.data?.links) ? response.data.links : [];
+      setRecentGeneratedLinks(links);
+    } catch (err) {
+      // Keep local cached links if the request fails.
+      console.error('Failed to fetch generated links:', err);
+    }
+  };
+
   const generateToken = async () => {
     if (deadlines.length === 0) {
       setErrorMessage({
@@ -188,7 +200,7 @@ const Dashboard = () => {
         token: response.data.token,
         url: response.data.submission_url || `${window.location.origin}/submit?token=${response.data.token}`,
         expires_at: response.data.expires_at,
-        generated_at: new Date().toISOString(),
+        generated_at: response.data.generated_at || new Date().toISOString(),
       };
 
       setRecentGeneratedLinks((prev) => {
@@ -204,6 +216,9 @@ const Dashboard = () => {
 
         return [generatedEntry, ...filtered].slice(0, 12);
       });
+
+      // Sync links from backend so generated links persist across logins/devices.
+      fetchGeneratedLinks();
     } catch (err) {
       console.error('Failed to generate token:', err);
       const errorMsg = err.response?.data?.error || 'Failed to generate submission token. Please try again.';
@@ -503,7 +518,7 @@ const Dashboard = () => {
       <Card className="recent-links-card">
         <div className="recent-links-header">
           <h3>Generated Links</h3>
-          <p>Saved on this browser and removed automatically when expired.</p>
+          <p>Synced to your professor account and removed automatically when expired.</p>
         </div>
 
         {recentGeneratedLinks.length > 0 && (

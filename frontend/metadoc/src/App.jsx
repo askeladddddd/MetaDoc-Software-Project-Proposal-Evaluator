@@ -1,8 +1,8 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import OAuthCallback from './pages/OAuthCallback';
 import TokenBasedSubmission from './pages/TokenBasedSubmission';
 import Dashboard from './pages/Dashboard';
@@ -12,6 +12,12 @@ import Reports from './pages/Reports';
 import ClassList from './pages/ClassList';
 import StudentLogin from './pages/StudentLogin';
 import './App.css';
+
+const Register = lazy(() =>
+  import('./pages/Register').then((module) => ({
+    default: module.default || module.Register,
+  }))
+);
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -65,7 +71,14 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Routes>
+        <Suspense
+          fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+              <div className="spinner"></div>
+            </div>
+          }
+        >
+          <Routes>
           {/* Public Routes */}
           <Route
             path="/"
@@ -152,8 +165,9 @@ function App() {
             }
           />
           {/* Default redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </Router>
   );

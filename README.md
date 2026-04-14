@@ -27,6 +27,7 @@ MetaDoc is a comprehensive **document analysis and evaluation platform** designe
 - Submission and deliverable management
 - Reports page for all submitted files in one glance
 - "View File" support for opening the original Google Drive file link
+- Collaborative Effort Report with deterministic fallback when AI labeling is unavailable
 - Class Record management (student and team data)
 - Batch operations for submissions
 
@@ -148,6 +149,37 @@ MAX_FILE_SIZE=52428800  # 50MB
 
 See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed configuration.
 
+## 🚢 Deployment
+
+The backend already reads `DATABASE_URL`, so moving to PostgreSQL does not require a schema rewrite. The cleanest production setup is:
+
+1. Provision a PostgreSQL database on Neon, Supabase, AWS RDS, or a similar host.
+2. Set `DATABASE_URL` to the PostgreSQL connection string, for example `postgresql://user:password@host:5432/metadoc`.
+3. Set `CORS_ORIGINS` or `FRONTEND_ORIGIN` to the deployed frontend URL.
+4. Install backend dependencies and apply migrations:
+
+```bash
+cd backend
+pip install -r requirements.txt
+flask db upgrade
+```
+
+5. Start the backend with a WSGI server:
+
+```bash
+gunicorn wsgi:app
+```
+
+6. Build the frontend and deploy it separately:
+
+```bash
+cd frontend/metadoc
+npm install
+npm run build
+```
+
+If the frontend and backend are on different domains and you rely on cookie-based auth, make sure your cookie and CORS settings match that cross-origin setup.
+
 ---
 
 ## 📂 Project Structure
@@ -196,7 +228,7 @@ frontend/metadoc/src/
 
 | Feature | Endpoint | Method |
 |---------|----------|--------|
-| **Authentication** | `POST /api/v1/auth/login` | POST |
+| **Authentication** | `GET /api/v1/auth/login` | GET |
 | **Dashboard** | `GET /api/v1/dashboard/overview` | GET |
 | **Submissions** | `POST /api/v1/submission/drive-link` | POST |
 | **Deadlines** | `GET /api/v1/dashboard/deadlines` | GET |
@@ -233,9 +265,14 @@ See [backend/README.md](backend/README.md) for complete API documentation.
 - Filter and sort submissions by title, team code, and date
 - Open submission details and use "View File" to open the original Google Drive file
 - Review analysis results and metrics per submission
-- Reports in the current UI are for overview and review (not CSV export workflow)
+- Export supported report files through the Reports workflow (CSV/PDF)
 
-### 5. **Deadline & Submission Intelligence**
+### 5. **Collaborative Effort Report**
+- Works best with native Google Docs (`application/vnd.google-apps.document`)
+- Requires professor Google Sign-In session with Drive access
+- If Gemini labeling is unavailable, the system returns deterministic contribution summaries instead of hard-failing
+
+### 6. **Deadline & Submission Intelligence**
 - Classify submissions as on-time or late
 - Monitor upcoming deliverables and active deadlines
 - Review per-submission metadata and contribution snapshots
@@ -315,7 +352,7 @@ npm install
 - Performance optimized
 - Security best practices applied
 
-**Last Updated:** March 2026
+**Last Updated:** April 2026
 
 ---
 

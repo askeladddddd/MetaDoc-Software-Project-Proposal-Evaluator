@@ -409,7 +409,7 @@ class DriveService:
         """Apply AI effort labels embedded in the collaboration analysis payload."""
         labels = (analysis or {}).get('effortLabels')
         if not isinstance(labels, list):
-            raise Exception('Gemini analysis missing effortLabels payload')
+            labels = []
 
         by_key = {}
         for row in labels:
@@ -436,7 +436,11 @@ class DriveService:
                 contributor['aiReason'] = ai_reason
 
         if labeled_count <= 0:
-            raise Exception('Gemini did not label any active contributors')
+            # Graceful fallback: keep deterministic contributor states when AI labels are unavailable.
+            for contributor in contributors:
+                if contributor.get('workStatus') != 'No Work Detected' and not contributor.get('aiEffortLabel'):
+                    contributor['aiEffortLabel'] = contributor.get('workStatus') or 'Contributing'
+            return contributors, 'gemini', False
 
         return contributors, 'gemini', True
 
@@ -1818,6 +1822,21 @@ class DriveService:
 
         warnings = list(dict.fromkeys(warnings))
 
+        total_words_added = sum(int(c.get('wordsWritten') or 0) for c in (contributors or []))
+        total_words_deleted = sum(int(c.get('wordsDeleted') or 0) for c in (contributors or []))
+
+        revision_analysis = self._build_summary_feedback(
+            contributors,
+            total_revisions,
+            scoring_meta=session_meta,
+            total_words_added=total_words_added,
+            total_words_deleted=total_words_deleted
+        )
+        analysis_provider = 'deterministic'
+        ai_provider = 'none'
+        ai_applied = False
+        ai_collab_analysis_applied = False
+
         try:
             revision_analysis, analysis_provider = self._build_collab_analysis(
                 revisions,
@@ -1828,9 +1847,10 @@ class DriveService:
                 contributors,
                 revision_analysis,
             )
-            ai_collab_analysis_applied = True
+            ai_collab_analysis_applied = bool(ai_applied)
         except Exception as ai_error:
-            return None, f"AI required mode failed: {ai_error}"
+            current_app.logger.warning(f"AI collaboration analysis unavailable; falling back to deterministic summary: {ai_error}")
+            warnings.append('AI labeling unavailable; using deterministic contribution summary')
         
         # Discard raw revision data (Data Minimization)
         del revisions

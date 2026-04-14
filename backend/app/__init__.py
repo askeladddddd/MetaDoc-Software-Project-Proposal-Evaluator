@@ -75,15 +75,6 @@ def create_directories(app):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
             app.logger.info(f'Created directory: {directory}')
-    
-    # Ensure database directory exists for SQLite
-    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    if db_uri.startswith('sqlite:///'):
-        db_path = db_uri.replace('sqlite:///', '')
-        db_dir = os.path.dirname(db_path)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
-            app.logger.info(f'Created database directory: {db_dir}')
 
 def register_blueprints(app):
     """Register application blueprints"""

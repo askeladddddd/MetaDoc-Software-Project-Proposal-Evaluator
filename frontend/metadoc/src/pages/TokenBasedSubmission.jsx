@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submissionAPI } from '../services/api';
 import axios from 'axios';
-import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, X, Check, Users } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, X, Info, ArrowUp, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Card from '../components/common/Card/Card';
-import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
-import logoImg from '../assets/images/MainLogo.png';
+import Modal from '../components/common/Modal/Modal';
+import authLogoImg from '../assets/images/Logo4.jpg';
 import '../styles/TokenBasedSubmission.css';
 
 
@@ -15,7 +15,6 @@ const TokenBasedSubmission = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user, login, logout, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
 
@@ -31,9 +30,9 @@ const TokenBasedSubmission = () => {
     drive_link: '',
   });
 
-  const [linkValidation, setLinkValidation] = useState(null);
   const [deadlineInfo, setDeadlineInfo] = useState(null);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [showUnauthorizedModal, setShowUnauthorizedModal] = useState(false);
 
   // Get token from URL
   const getTokenFromURL = () => {
@@ -64,17 +63,19 @@ const TokenBasedSubmission = () => {
             if (response.data.is_registered) {
               setIsRegistered(true);
               setRegistrationStatusMessage('');
-              const { student_id, first_name, last_name, course_year, team_code, email, name } = response.data;
+              const { student_id, first_name, last_name, course_year, team_code, subject_no, email, name } = response.data;
               setStudentInfo({
                 student_id,
                 name: name || `${first_name} ${last_name}`.trim(),
                 course_year: course_year || '',
                 team_code: team_code || '',
+                subject_no: subject_no || '',
                 email: email || user?.email || ''
               });
             } else {
               setIsRegistered(false);
-              if (response.data.is_professor) {
+              const roleValue = String(user?.role || '').toLowerCase();
+              if (response.data.is_professor || roleValue === 'professor') {
                 setIsProfessor(true);
                 setRegistrationStatusMessage('');
               } else {
@@ -103,38 +104,6 @@ const TokenBasedSubmission = () => {
   useEffect(() => {
     // No-op - redirecting to registration is no longer needed
   }, [isAuthenticated, checkingRegistration, isRegistered, navigate]);
-
-
-  const handleValidateLink = async () => {
-    if (!driveData.drive_link) {
-      setError('Please enter a Google Drive link');
-      return;
-    }
-
-    setValidating(true);
-    setLinkValidation(null);
-    setError(null);
-
-    try {
-      const response = await submissionAPI.validateDriveLink(driveData.drive_link);
-      if (response.data.valid) {
-        setLinkValidation({
-          valid: true,
-          fileInfo: response.data.file_info,
-        });
-      } else {
-        setLinkValidation({
-          valid: false,
-          error: response.data.error,
-          guidance: response.data.guidance,
-        });
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to validate link');
-    } finally {
-      setValidating(false);
-    }
-  };
 
   const handleDriveLinkSubmit = async (e) => {
     e.preventDefault();
@@ -165,7 +134,6 @@ const TokenBasedSubmission = () => {
 
       // Reset form
       setDriveData({ drive_link: '' });
-      setLinkValidation(null);
 
       // Clear success message after 5 seconds
       setTimeout(() => setSuccess(null), 5000);
@@ -195,7 +163,7 @@ const TokenBasedSubmission = () => {
     }
   };
 
-  const canSubmitDriveLink = Boolean(driveData.drive_link?.trim()) && !loading && !validating;
+  const canSubmitDriveLink = Boolean(driveData.drive_link?.trim()) && !loading;
   const descriptionText = String(deadlineInfo?.description || '').trim();
   const isLongDescription = descriptionText.length > 160;
   const descriptionPreview = isLongDescription
@@ -223,50 +191,32 @@ const TokenBasedSubmission = () => {
   // 2. Login Gate - Modified to show login directly on page
   if (!isAuthenticated) {
     return (
-      <div className="premium-theme">
-        <header className="premium-branding">
-          <h1 className="metallic-text">MetaDoc</h1>
-          <p className="subtitle">Student Submission Portal</p>
-        </header>
-
-        <Card className="premium-center-card">
-          <div className="premium-icon-box">
-            <Users size={40} />
-          </div>
-
-          <h2 className="premium-card-title">Google Login</h2>
-
-          <p className="premium-card-desc">
-            Sign in with the <strong>Gmail account</strong> that you listed in the excel class list.
-          </p>
-
-          <div style={{ marginTop: 'var(--spacing-xl)' }}>
+      <div className="submission-theme">
+        <p className="submission-sign-message">Click the button</p>
+        <Card className="premium-center-card submission-login-card logo-only-card">
+          <div className="oauth-logo-entry">
             <button
               type="button"
               onClick={handleStudentLogin}
               disabled={authLoading}
-              className="google-login-button"
+              className="oauth-logo-button"
+              aria-label="Sign in with Google"
             >
-              {authLoading ? (
-                <div className="btn-spinner"></div>
-              ) : (
-                <>
-                  <svg width="24" height="24" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M23.5 12.2c0-.8-.1-1.5-.2-2.2H12v4.1h6.5c-.3 1.5-1.1 2.8-2.4 3.6v3h3.8c2.3-2.1 3.6-5.2 3.6-8.5z" />
-                    <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-3c-1.1.7-2.5 1.1-4.1 1.1-3.1 0-5.8-2.1-6.7-5H1.5v3.1C3.5 21.3 7.5 24 12 24z" />
-                    <path fill="#FBBC05" d="M5.3 14.2c-.2-.6-.4-1.3-.4-2.2s.2-1.5.4-2.2V6.7H1.5C.5 8.7 0 10.3 0 12s.5 3.3 1.5 5.3l3.8-3.1z" />
-                    <path fill="#EA4335" d="M12 4.8c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.7l3.8 3.1c.9-2.9 3.6-5 6.7-5z" />
-                  </svg>
-                  Sign in with Google
-                </>
-              )}
+              <span className="oauth-logo-orb">
+                <img src={authLogoImg} alt="Sign in with Google" className="oauth-logo-image" />
+              </span>
+              {!authLoading && <span className="logo-hover-tooltip">Click to proceed</span>}
             </button>
-          </div>
-
-          <div className="university-footer">
-            Cebu Institute of Technology - University
+            {authLoading && <p className="logo-only-hint">Redirecting to Google...</p>}
           </div>
         </Card>
+
+        <div className="university-footer submission-footer-brand submission-footer-outside">
+          <div className="university-footer-stack">
+            <span>Cebu Institute of Technology - University</span>
+            <span className="university-footer-version">MetaDoc V1.0</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -275,98 +225,88 @@ const TokenBasedSubmission = () => {
   if (isAuthenticated && !checkingRegistration && !isRegistered) {
     if (isProfessor) {
       return (
-        <div className="premium-theme">
-          <header className="premium-branding">
-            <h1 className="metallic-text">MetaDoc</h1>
-            <p className="subtitle">Professor Preview Mode</p>
-          </header>
-
+        <div className="submission-theme">
           <Card className="premium-center-card">
-            <div className="premium-icon-box" style={{ background: 'var(--color-maroon)', color: 'white' }}>
-              <Users size={40} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowUnauthorizedModal(true)}
+              aria-label="Open unauthorized access explanation"
+              className="premium-icon-box"
+              style={{ background: 'var(--color-maroon)', color: 'white', border: 'none', cursor: 'pointer' }}
+            >
+              <Info size={40} />
+            </button>
 
-            <h2 className="premium-card-title">Professor Preview</h2>
+            <h2 className="premium-card-title">Unauthorized Access</h2>
 
             <p className="premium-card-desc" style={{ marginBottom: '1.5rem', fontWeight: 'bold' }}>
-              You are currently logged in as a Professor.
+              Click the info icon to see why this page is blocked for professors.
             </p>
+          </Card>
 
-            <p className="premium-card-desc" style={{ fontSize: '0.95rem' }}>
-              To test the student submission process for <strong>{deadlineInfo?.title || 'this deadline'}</strong>, please:
-              <br /><br />
-              1. Open this link in an <strong>Incognito window</strong> or <strong>another browser</strong>.<br />
-              2. Or <strong>Sign Out</strong> and log in with a student Gmail account.
-            </p>
+          <div className="university-footer submission-footer-brand submission-footer-outside">
+            <div className="university-footer-stack">
+              <span>Cebu Institute of Technology - University</span>
+              <span className="university-footer-version">MetaDoc V1.0</span>
+            </div>
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginTop: '2rem' }}>
+          <Modal
+            isOpen={showUnauthorizedModal}
+            onClose={() => setShowUnauthorizedModal(false)}
+            title="Unauthorized Access"
+            type="error"
+            showCloseButton={false}
+            modalClassName="unauthorized-access-modal"
+            footer={(
               <Button
                 variant="primary"
-                onClick={() => navigate('/dashboard')}
-                style={{ width: '100%', borderRadius: '16px', padding: '14px' }}
+                onClick={() => setShowUnauthorizedModal(false)}
+                style={{ minWidth: '180px' }}
               >
-                Go to Dashboard
+                Close
               </Button>
-              <Button
-                variant="outline"
-                onClick={logout}
-                style={{ width: '100%', borderRadius: '16px' }}
-              >
-                Sign Out to Test
-              </Button>
+            )}
+          >
+            <div className="unauthorized-modal-content">
+              <p className="unauthorized-modal-lead">
+                You are signed in as a professor, so direct student submission access is blocked for this page.
+              </p>
+              <p className="unauthorized-modal-text">
+                The submission portal is only for student Gmail accounts matched to the class list.
+              </p>
+              <ul className="unauthorized-modal-steps">
+                <li>Open this link in an incognito window or another browser.</li>
+                <li>Or sign out and log in using a student Gmail account.</li>
+              </ul>
             </div>
-
-            <div className="university-footer">
-              Cebu Institute of Technology - University
-            </div>
-          </Card>
+          </Modal>
         </div>
       );
     }
 
     return (
-      <div className="premium-theme">
-        <header className="premium-branding">
-          <h1 className="metallic-text">MetaDoc</h1>
-          <p className="subtitle">Student Submission Portal</p>
-        </header>
-
-        <Card className="premium-center-card">
-          <div className="premium-icon-box" style={{ background: '#fee2e2', color: '#dc2626' }}>
-            <AlertCircle size={40} />
+      <div className="submission-auth-failure-page">
+        <Card className="submission-auth-failure-card">
+          <div className="submission-auth-failure-icon-shell">
+            <AlertCircle size={36} className="submission-auth-failure-icon" />
           </div>
 
-          <h2 className="premium-card-title" style={{ color: '#dc2626' }}>Access Denied</h2>
+          <h2 className="submission-auth-failure-title">Authentication Failed</h2>
 
-          <p className="premium-card-desc" style={{ marginBottom: '1.5rem', fontWeight: 'bold', color: '#991b1b' }}>
-            {registrationStatusMessage || 'Your Gmail account is not in this class list'}
+          <p className="submission-auth-failure-message">
+            {registrationStatusMessage || 'This account is not listed in the class list.'}
           </p>
 
-          <p className="premium-card-desc" style={{ fontSize: '0.95rem' }}>
-            Logged in as: <strong>{user?.email}</strong><br /><br />
-            Please ensure you are using the <strong>Gmail account</strong> that you listed in the excel class list. If this IS the correct account, contact your professor.
-          </p>
+          <p className="submission-auth-failure-redirect">Redirecting to sign in...</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginTop: '2rem' }}>
-            <Button
-              variant="primary"
-              onClick={() => window.location.reload()}
-              style={{ width: '100%', borderRadius: '16px', padding: '14px' }}
-            >
-              Try Again
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={logout}
-              style={{ width: '100%', borderRadius: '16px', color: '#6b7280' }}
-            >
-              Sign Out
-            </Button>
-          </div>
-
-          <div className="university-footer">
-            Cebu Institute of Technology - University
-          </div>
+          <Button
+            variant="primary"
+            onClick={() => window.location.reload()}
+            className="submission-auth-failure-button"
+          >
+            Refresh
+          </Button>
         </Card>
       </div>
     );
@@ -374,62 +314,77 @@ const TokenBasedSubmission = () => {
 
   return (
     <div className="submit-page">
-      <Card className="submit-container">
-        <div className="submit-header">
-          <h2>Submit Your Document</h2>
-          {deadlineInfo ? (
-            <div className="deadline-info">
-              <h3 className="deadline-title">{deadlineInfo.title}</h3>
-              {deadlineInfo.description && (
-                <div className="deadline-description-block">
-                  <p className="deadline-description">{descriptionPreview}</p>
-                  {isLongDescription && (
-                    <button
-                      type="button"
-                      className="deadline-read-more-btn"
-                      onClick={() => setShowDescriptionModal(true)}
-                    >
-                      Read more
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="submission-context">
-                <div className="submission-context-avatar">
-                  {studentInfo?.name?.charAt(0) || 'S'}
-                </div>
-                <div className="submission-context-details">
-                  <p className="submission-context-label">Submitting as</p>
-                  <p className="submission-context-name">
-                    {studentInfo?.name || 'Student'}
-                  </p>
-                  <p className="submission-context-meta">Student ID: {studentInfo?.student_id || 'N/A'}</p>
-                  <p className="submission-context-meta">Course & Year: {studentInfo?.course_year || 'N/A'}</p>
-                  <p className="submission-context-meta">Team Code: {studentInfo?.team_code || 'N/A'}</p>
-                  <p className="submission-context-email">{studentInfo?.email || user?.email || ''}</p>
+      <div className="submit-workspace">
+        <header className="submit-page-title-block">
+          <h2 className="submit-page-title">Submit Your Document</h2>
+        </header>
 
-                </div>
-              </div>
+        {!getTokenFromURL() && (
+          <div className="alert alert-error">
+            <AlertCircle size={20} />
+            <div>
+              <p className="font-semibold">Invalid Submission Link</p>
+              <p className="text-sm">Please use the submission link provided by your professor.</p>
             </div>
-          ) : (
-            <p>Provide a Google Drive link for analysis</p>
-          )}
-        </div>
+          </div>
+        )}
 
-        {
-          !getTokenFromURL() && (
-            <div className="alert alert-error">
-              <AlertCircle size={20} />
-              <div>
-                <p className="font-semibold">Invalid Submission Link</p>
-                <p className="text-sm">Please use the submission link provided by your professor.</p>
+        {deadlineInfo && (
+          <Card className="submit-section-card deliverable-card file-like-card">
+            <h1 className="deliverable-heading">TITLE : {deadlineInfo.title}</h1>
+            {deadlineInfo.description && (
+              <div className="deadline-description-block">
+                <p className="deadline-description">{descriptionPreview}</p>
+                {isLongDescription && (
+                  <button
+                    type="button"
+                    className="deadline-read-more-btn"
+                    onClick={() => setShowDescriptionModal(true)}
+                    aria-label="See the full description"
+                  >
+                    See more
+                  </button>
+                )}
               </div>
-            </div>
-          )
-        }
+            )}
+          </Card>
+        )}
 
-        {
-          success && (
+        <Card className="submit-section-card student-info-card">
+          <h2 className="section-card-title">Student Details</h2>
+          <p className="student-kicker">Submitting as</p>
+          <div className="student-grid">
+            <div className="student-grid-item">
+              <span className="student-grid-label">Name</span>
+              <span className="student-grid-value">{studentInfo?.name || 'N/A'}</span>
+            </div>
+            <div className="student-grid-item">
+              <span className="student-grid-label">Course & Year</span>
+              <span className="student-grid-value">{studentInfo?.course_year || 'N/A'}</span>
+            </div>
+
+            <div className="student-grid-item">
+              <span className="student-grid-label">Student ID</span>
+              <span className="student-grid-value">{studentInfo?.student_id || 'N/A'}</span>
+            </div>
+            <div className="student-grid-item">
+              <span className="student-grid-label">Team Code</span>
+              <span className="student-grid-value">{studentInfo?.team_code || 'N/A'}</span>
+            </div>
+
+            <div className="student-grid-item">
+              <span className="student-grid-label">Subject No.</span>
+              <span className="student-grid-value">{studentInfo?.subject_no || 'N/A'}</span>
+            </div>
+            <div className="student-grid-item">
+              <span className="student-grid-label">Email</span>
+              <span className="student-grid-value student-grid-value-email">{studentInfo?.email || user?.email || 'N/A'}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="submit-section-card drive-submit-card">
+          {success && (
             <div className="alert alert-success">
               <CheckCircle size={20} />
               <div>
@@ -437,10 +392,18 @@ const TokenBasedSubmission = () => {
                 <p className="text-sm">Job ID: {success.jobId}</p>
               </div>
             </div>
-          )
-        }
+          )}
 
-        <div className="submit-content">
+          {loading && (
+            <div className="submission-processing-overlay" role="status" aria-live="polite" aria-busy="true">
+              <div className="submission-processing-card">
+                <Loader2 size={28} className="submission-processing-spinner" />
+                <p className="submission-processing-title">Submitting your document</p>
+                <p className="submission-processing-text">Please wait while we validate and process your Google Drive link.</p>
+              </div>
+            </div>
+          )}
+
           <div className="card-header submission-drive-header">
             <h3 className="card-title text-maroon submission-drive-title">Google Drive Submission</h3>
             <p className="text-gray-600 text-sm submission-drive-subtitle">
@@ -448,10 +411,10 @@ const TokenBasedSubmission = () => {
             </p>
           </div>
 
-          <form onSubmit={handleDriveLinkSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleDriveLinkSubmit} className="flex flex-col gap-4" aria-busy={loading}>
             <div className="form-group">
               <label className="form-label">GOOGLE DRIVE LINK</label>
-              <div className="drive-link-input-wrap">
+              <div className="drive-submit-inline">
                 <input
                   type="url"
                   name="drive_link"
@@ -461,51 +424,22 @@ const TokenBasedSubmission = () => {
                   }
                   placeholder="https://drive.google.com/file/d/..."
                   className="form-input w-full"
-                  style={{ paddingRight: '3rem' }}
+                  disabled={loading}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={handleValidateLink}
-                  disabled={!driveData.drive_link || validating}
-                  className="drive-link-validate-btn flex items-center justify-center transition-colors"
+                <Button
+                  type="submit"
+                  size="large"
+                  loading={loading}
+                  disabled={!canSubmitDriveLink}
+                  className="submit-analysis-btn submit-analysis-inline submit-analysis-icon-only"
+                  aria-label="Submit for Analysis"
+                  title="Submit for Analysis"
                 >
-                  {validating ? (
-                    <div className="btn-spinner" style={{ color: 'var(--color-maroon)' }}></div>
-                  ) : (
-                    <Check size={20} color="var(--color-maroon)" strokeWidth={3} />
-                  )}
-                </button>
+                  <ArrowUp size={22} strokeWidth={2.6} />
+                </Button>
               </div>
             </div>
-
-            {linkValidation && (
-              <div className={`alert ${linkValidation.valid ? 'alert-success' : 'alert-error'}`}>
-                {linkValidation.valid ? (
-                  <>
-                    <CheckCircle size={20} />
-                    <div>
-                      <p className="font-semibold">Link is valid!</p>
-                      <p className="text-sm">File: {linkValidation.fileInfo?.name}</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={20} />
-                    <div>
-                      <p className="font-semibold">{linkValidation.error}</p>
-                      {linkValidation.guidance && (
-                        <div className="guidance-steps">
-                          {linkValidation.guidance.steps?.map((step, index) => (
-                            <p key={index} className="text-sm">{step}</p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
 
             {error && typeof error === 'object' && (
               <div className="alert alert-error">
@@ -529,20 +463,16 @@ const TokenBasedSubmission = () => {
                 <p>{error}</p>
               </div>
             )}
-
-            <Button
-              type="submit"
-              size="large"
-              loading={loading}
-              disabled={!canSubmitDriveLink}
-              icon={LinkIcon}
-              className="w-full submit-analysis-btn"
-            >
-              Submit for Analysis
-            </Button>
           </form>
+        </Card>
+      </div>
+
+      <div className="university-footer university-footer-with-logo submission-footer-brand submission-footer-outside">
+        <div className="university-footer-stack">
+          <span>Cebu Institute of Technology - University</span>
+          <span className="university-footer-version">MetaDoc V1.0</span>
         </div>
-      </Card >
+      </div>
 
       {showDescriptionModal && (
         <div className="modal-overlay" onClick={() => setShowDescriptionModal(false)}>
