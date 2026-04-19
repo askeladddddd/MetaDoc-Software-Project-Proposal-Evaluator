@@ -11,7 +11,10 @@ import uuid
 from datetime import datetime
 from flask import current_app
 from werkzeug.utils import secure_filename
-import magic
+try:
+    import magic
+except ImportError:
+    magic = None
 
 from app.core.extensions import db
 from app.models import Submission, SubmissionStatus, Student
@@ -56,18 +59,19 @@ class SubmissionService:
         file_content = file.read(1024)  # Read first 1KB for MIME detection
         file.seek(0)  # Reset pointer
         
-        try:
-            mime_type = magic.from_buffer(file_content, mime=True)
-            # DOCX files are often detected as application/zip, so check extension too
-            if mime_type not in self.allowed_mime_types:
-                # If it's a ZIP file, verify it's actually a DOCX by checking extension
-                if mime_type == 'application/zip' and filename.endswith('.docx'):
-                    pass  # Valid DOCX file
-                else:
-                    errors.append(f"Invalid file format. Detected: {mime_type}")
-        except Exception as e:
-            current_app.logger.warning(f"MIME type detection failed: {e}")
-            # Fallback to filename-based validation
+        if magic:
+            try:
+                mime_type = magic.from_buffer(file_content, mime=True)
+                # DOCX files are often detected as application/zip, so check extension too
+                if mime_type not in self.allowed_mime_types:
+                    # If it's a ZIP file, verify it's actually a DOCX by checking extension
+                    if mime_type == 'application/zip' and filename.endswith('.docx'):
+                        pass  # Valid DOCX file
+                    else:
+                        errors.append(f"Invalid file format. Detected: {mime_type}")
+            except Exception as e:
+                current_app.logger.warning(f"MIME type detection failed: {e}")
+                # Fallback to filename-based validation
         
         return errors
     
