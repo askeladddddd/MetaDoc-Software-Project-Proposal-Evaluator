@@ -9,7 +9,10 @@ Provides comprehensive validation for:
 """
 
 import mimetypes
-import magic
+try:
+    import magic
+except ImportError:
+    magic = None
 import os
 from flask import current_app
 
@@ -36,15 +39,23 @@ class ValidationService:
         return True, None
     
     @staticmethod
-    def validate_mime_type(file_content):
-        """Validate MIME type using python-magic"""
-        try:
-            mime_type = magic.from_buffer(file_content, mime=True)
-            if mime_type not in ValidationService.ALLOWED_MIME_TYPES:
-                return False, f"Unsupported MIME type: {mime_type}"
-            return True, mime_type
-        except Exception as e:
-            return False, f"MIME type detection failed: {e}"
+    def validate_mime_type(file_content, original_filename=None):
+        """Validate MIME type using python-magic or fallback"""
+        if magic:
+            try:
+                mime_type = magic.from_buffer(file_content, mime=True)
+                if mime_type not in ValidationService.ALLOWED_MIME_TYPES:
+                    return False, f"Unsupported MIME type: {mime_type}"
+                return True, mime_type
+            except Exception as e:
+                return False, f"MIME type detection failed: {e}"
+        
+        # Fallback if libmagic is unavailable on Render
+        if original_filename:
+            mime_type, _ = mimetypes.guess_type(original_filename)
+            if mime_type and mime_type not in ValidationService.ALLOWED_MIME_TYPES:
+                return False, f"Unsupported MIME type from extension: {mime_type}"
+        return True, "application/octet-stream"
     
     @staticmethod
     def validate_file_size(file_size, max_size=None):
