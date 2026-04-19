@@ -24,6 +24,10 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     
+    # CRITICAL: Trust reverse proxies (like Render) so Secure cookies work properly
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    
     # Initialize extensions using core module
     init_extensions(app)
     
