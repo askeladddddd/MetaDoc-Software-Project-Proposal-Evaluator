@@ -105,9 +105,10 @@ class Config:
     # Logging Configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
     LOG_FILE = os.environ.get('LOG_FILE') or './logs/metadoc.log'
+    FRONTEND_URL = os.environ.get('FRONTEND_URL') or 'http://localhost:5173'
     CORS_ORIGINS = _split_csv(
         os.environ.get('CORS_ORIGINS'),
-        os.environ.get('FRONTEND_ORIGIN', 'http://localhost:3000,http://localhost:5173,http://localhost:5174')
+        os.environ.get('FRONTEND_ORIGIN', f"{FRONTEND_URL},http://localhost:3000,http://localhost:5173,http://localhost:5174")
     )
 
 class DevelopmentConfig(Config):
