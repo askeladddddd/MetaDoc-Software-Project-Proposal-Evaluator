@@ -299,6 +299,71 @@ const ClassList = () => {
         return result;
     };
 
+    const formatStudentSaveMessage = (student, action = 'updated') => {
+        const fullName = `${student.firstName || ''} ${student.lastName || ''}`.trim();
+        const parts = [];
+
+        if (student.studentId) parts.push(`Student No. ${student.studentId}`);
+        if (fullName) parts.push(`Name ${fullName}`);
+        if (student.courseYear) parts.push(`Course & Year ${student.courseYear}`);
+        if (student.subjectNo) parts.push(`Subject No. ${student.subjectNo}`);
+        if (student.teamCode) parts.push(`Team Code ${student.teamCode}`);
+        if (student.email) parts.push(`Email ${student.email}`);
+
+        return parts.length > 0
+            ? `Student record ${action} successfully: ${parts.join(', ')}.`
+            : `Student record ${action} successfully.`;
+    };
+
+    const buildUpdatedFieldsSummary = (currentRow, originalRow, parsedName = null) => {
+        const changes = [];
+        const originalFullName = `${originalRow?.firstName || ''} ${originalRow?.lastName || ''}`.trim();
+        const currentFullName = parsedName
+            ? `${parsedName.firstName || ''} ${parsedName.lastName || ''}`.trim()
+            : `${currentRow?.firstName || ''} ${currentRow?.lastName || ''}`.trim();
+
+        if ((currentRow?.studentId || '') !== (originalRow?.studentId || '')) {
+            changes.push(`Student No. ${currentRow?.studentId || ''}`.trim());
+        }
+
+        if (currentFullName !== originalFullName) {
+            changes.push(`Name ${currentFullName}`.trim());
+        }
+
+        if ((currentRow?.courseYear || '') !== (originalRow?.courseYear || '')) {
+            changes.push(`Course & Year ${currentRow?.courseYear || ''}`.trim());
+        }
+
+        if ((currentRow?.subjectNo || '') !== (originalRow?.subjectNo || '')) {
+            changes.push(`Subject No. ${currentRow?.subjectNo || ''}`.trim());
+        }
+
+        if ((currentRow?.teamCode || '') !== (originalRow?.teamCode || '')) {
+            changes.push(`Team Code ${currentRow?.teamCode || ''}`.trim());
+        }
+
+        if ((currentRow?.email || '') !== (originalRow?.email || '')) {
+            changes.push(`Email ${currentRow?.email || ''}`.trim());
+        }
+
+        return changes;
+    };
+
+    const formatBulkUpdateMessage = (savedItems) => {
+        if (savedItems.length === 0) {
+            return 'Student record updated successfully.';
+        }
+
+        const items = savedItems.map(({ row, backup, parsedName }) => {
+            const changes = buildUpdatedFieldsSummary(row, backup, parsedName);
+            return changes.length > 0 ? changes.join(', ') : `Student No. ${row.studentId}`;
+        });
+
+        return savedItems.length === 1
+            ? `Student list updated successfully: ${items[0]}.`
+            : `Student list updated successfully: ${items.join(' | ')}.`;
+    };
+
     const handleRowChange = (id, field, value) => {
         setClassRows(prev => prev.map(row => {
             if (row.id !== id) return row;
@@ -321,12 +386,14 @@ const ClassList = () => {
             setSuccessMessage(null);
             const errors = [];
             const failedEmailRestores = [];
+            const savedRecords = [];
             let savedCount = 0;
 
             for (const id of selectedIds) {
                 const row = classRows.find(r => r.id === id);
                 if (row) {
                     try {
+                        const originalRow = rowBackups[id] || row;
                         const draftFullName = fullNameDrafts[row.id];
                         const { firstName, lastName } = draftFullName !== undefined
                             ? parseFullName(draftFullName, row.firstName, row.lastName)
@@ -337,10 +404,24 @@ const ClassList = () => {
                             last_name: lastName,
                             first_name: firstName,
                             course_year: row.courseYear,
+                            subject_no: row.subjectNo,
                             email: row.email,
                             team_code: row.teamCode
                         };
                         await dashboardAPI.updateDeadlineStudent(row.id, updateData);
+                        savedRecords.push({
+                            row: {
+                                studentId: row.studentId,
+                                firstName,
+                                lastName,
+                                courseYear: row.courseYear,
+                                subjectNo: row.subjectNo,
+                                teamCode: row.teamCode,
+                                email: row.email
+                            },
+                            backup: originalRow,
+                            parsedName: { firstName, lastName }
+                        });
                         savedCount += 1;
                     } catch (err) {
                         const message = err.response?.data?.error || 'Unknown error';
@@ -367,10 +448,10 @@ const ClassList = () => {
                     : '';
                 setError(`Failed to save some records (${errors.length}): ${errors.slice(0, 2).join(' | ')}${restoreNote}`);
                 if (savedCount > 0) {
-                    setSuccessMessage(`${savedCount} student record(s) saved successfully.`);
+                    setSuccessMessage(formatBulkUpdateMessage(savedRecords));
                 }
             } else {
-                setSuccessMessage(`${savedCount} student record(s) saved successfully.`);
+                setSuccessMessage(formatBulkUpdateMessage(savedRecords));
                 setSelectedIds([]);
                 setFullNameDrafts({});
                 setRowBackups({});
@@ -568,7 +649,15 @@ const ClassList = () => {
             await dashboardAPI.addDeadlineStudent(normalizedFormData);
             setIsModalOpen(false);
             await fetchStudents();
-            setSuccessMessage(isEditing ? 'Student record updated successfully.' : 'Student record added successfully.');
+            setSuccessMessage(formatStudentSaveMessage({
+                studentId: normalizedFormData.student_id,
+                firstName: normalizedFormData.first_name,
+                lastName: normalizedFormData.last_name,
+                courseYear: normalizedFormData.course_year,
+                subjectNo: normalizedFormData.subject_no,
+                teamCode: normalizedFormData.team_code,
+                email: normalizedFormData.email
+            }, isEditing ? 'updated' : 'added'));
         } catch (err) {
             console.error('Operation failed:', err);
             setModalError(err.response?.data?.error || 'Failed to process student record.');
@@ -632,7 +721,7 @@ const ClassList = () => {
                 </div>
                 <div className="class-record-actions">
                     {classRows.length > 0 && (
-                        <span className="record-count">{classRows.length} Students</span>
+                        <span className="record-count">{classRows.length} {classRows.length === 1 ? 'Student' : 'Students'}</span>
                     )}
                     <button
                         type="button"
