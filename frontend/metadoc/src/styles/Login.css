@@ -1257,6 +1257,26 @@
   padding-top: 0.85rem;
 }
 
+.login-legal-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0.75rem;
+  color: var(--color-gray-500);
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.login-legal-links a {
+  color: var(--color-maroon);
+  font-weight: 600;
+}
+
+.login-legal-links a:hover {
+  color: var(--color-maroon-dark);
+}
+
 .login-university-row {
   display: flex;
   align-items: center;

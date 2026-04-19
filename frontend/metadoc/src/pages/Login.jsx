@@ -266,6 +266,11 @@ const Login = () => {
               <div className="login-university-row">
                 <span>Cebu Institute of Technology - University</span>
               </div>
+              <div className="login-legal-links">
+                <Link to="/privacy-policy">Privacy Policy</Link>
+                <span aria-hidden="true">•</span>
+                <Link to="/terms">Terms of Service</Link>
+              </div>
               <p className="text-sm">© 2025 MetaDoc. All rights reserved.</p>
             </div>
           </div>

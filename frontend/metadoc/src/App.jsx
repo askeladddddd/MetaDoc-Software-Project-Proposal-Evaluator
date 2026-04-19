@@ -11,6 +11,8 @@ import SubmissionDetailView from './pages/SubmissionDetailView';
 import Reports from './pages/Reports';
 import ClassList from './pages/ClassList';
 import StudentLogin from './pages/StudentLogin';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import './App.css';
 
 
@@ -86,6 +88,8 @@ function App() {
           <Route path="/submit" element={<TokenBasedSubmission />} />
           <Route path="/student/login" element={<StudentLogin />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
 
           {/* Protected Routes */}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, Info } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Button from '../components/common/Button/Button';
@@ -87,6 +87,11 @@ const StudentLogin = () => {
                         <div className="university-footer-stack">
                             <span>Cebu Institute of Technology - University</span>
                             <span className="university-footer-version">MetaDoc V1.0</span>
+                            <div className="login-legal-links">
+                                <Link to="/privacy-policy">Privacy Policy</Link>
+                                <span aria-hidden="true">•</span>
+                                <Link to="/terms">Terms of Service</Link>
+                            </div>
                         </div>
                     </div>
 
@@ -206,6 +211,11 @@ const StudentLogin = () => {
                 <div className="university-footer-stack">
                     <span>Cebu Institute of Technology - University</span>
                     <span className="university-footer-version">MetaDoc V1.0</span>
+                    <div className="login-legal-links">
+                        <Link to="/privacy-policy">Privacy Policy</Link>
+                        <span aria-hidden="true">•</span>
+                        <Link to="/terms">Terms of Service</Link>
+                    </div>
                 </div>
             </div>
         </div>
