@@ -88,17 +88,6 @@ const Login = () => {
     }
   }, [location, navigate]);
 
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError(null);
-  };
-
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError(null);
@@ -107,39 +96,6 @@ const Login = () => {
     } catch (err) {
       setError('Failed to initiate Google login. Please try again.');
       setGoogleLoading(false);
-    }
-  };
-
-
-
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      if (!formData.email.trim() || !formData.password.trim()) {
-        throw new Error('Email and password are required');
-      }
-
-      const response = await authAPI.loginBasic({
-        email: formData.email,
-        password: formData.password
-      });
-
-      const data = response.data;
-
-      // Handle successful login
-      setSuccess('✓ Login successful! Redirecting to dashboard...');
-
-      setTimeout(() => {
-        handleOAuthCallback(data.session_token, data.user);
-        navigate('/dashboard', { replace: true });
-      }, 2000);
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
     }
   };
 
@@ -282,37 +238,7 @@ const Login = () => {
               </div>
             )}
 
-            <form onSubmit={handleFormSubmit}>
-              <Input
-                label="Email Address"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="Enter your email"
-                icon={Mail}
-                required
-              />
 
-              <Input
-                label="Password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Enter your password"
-                icon={Lock}
-                required
-              />
-
-              <Button type="submit" loading={loading} size="large" className="w-full">
-                Sign In
-              </Button>
-            </form>
-
-            <div className="login-divider">
-              <span>or continue with</span>
-            </div>
 
             <Button
               type="button"
