@@ -303,10 +303,10 @@ const Deliverable = () => {
     try {
       if (editingFolder) {
         await dashboardAPI.updateDeadline(editingFolder.id, payload);
-        setShowSuccessModal(true);
+        setShowSuccessModal('Edit Successful');
       } else {
         await dashboardAPI.createDeadline(payload);
-        setShowSuccessModal(true);
+        setShowSuccessModal('Create Successful');
       }
 
       setShowFolderModal(false);
@@ -1149,7 +1149,7 @@ const Deliverable = () => {
               <div className="success-icon">
                 <CheckCircle size={24} />
               </div>
-              <h2>Success!</h2>
+              <h2>{typeof showSuccessModal === 'string' ? showSuccessModal : 'Success!'}</h2>
             </div>
             <div className="modal-body">
               <p>Deliverable has been successfully saved.</p>
