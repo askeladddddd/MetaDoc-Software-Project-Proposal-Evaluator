@@ -6,6 +6,7 @@ Extracted from api/auth.py to follow proper service layer architecture.
 
 import secrets
 import os
+import hashlib
 
 # Force insecure transport for local development (must be set before oauth imports)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
