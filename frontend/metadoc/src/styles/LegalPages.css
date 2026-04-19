@@ -1,6 +1,6 @@
 .legal-page {
   min-height: 100vh;
-  background: #ffffff;
+  background: #f8f9fb;
   color: var(--color-gray-800);
   padding: 1.5rem 1rem 2.5rem;
 }
@@ -12,39 +12,50 @@
 
 .legal-topbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.legal-brand {
-  font-weight: 700;
-  color: var(--color-gray-900);
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
 }
 
 .legal-nav-link {
+  display: inline-block;
   color: var(--color-gray-700);
-  font-weight: 500;
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.1rem 0.2rem;
+}
+
+.legal-nav-link:hover {
+  color: var(--color-gray-900);
 }
 
 .legal-card {
   background: #ffffff;
   border: 1px solid var(--color-gray-200);
-  border-radius: 10px;
-  box-shadow: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
   overflow: hidden;
 }
 
 .legal-hero {
-  padding: 1.5rem;
+  padding: 1.5rem 1.75rem 1.15rem;
   background: #ffffff;
   border-bottom: 1px solid var(--color-gray-200);
 }
 
+.legal-logo {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  display: block;
+  margin: 0 0 0.8rem;
+}
+
 .legal-title {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 1.7rem;
   color: var(--color-gray-900);
 }
 
@@ -55,16 +66,17 @@
 }
 
 .legal-content {
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1.1rem 1.75rem 1.5rem;
   display: grid;
-  gap: 0.8rem;
+  gap: 0;
 }
 
 .legal-section {
-  background: #ffffff;
-  border: 1px solid var(--color-gray-200);
-  border-radius: 8px;
-  padding: 1rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-gray-200);
+  border-radius: 0;
+  padding: 1.1rem 0;
   box-shadow: none;
 }
 
@@ -88,8 +100,9 @@
 }
 
 .legal-callout {
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: transparent;
+  border: 0;
+  border-bottom: 0;
 }
 
 .legal-callout strong {
@@ -107,8 +120,8 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding: 0;
-  margin-top: 0.75rem;
+  padding: 0 0.25rem;
+  margin-top: 0.9rem;
   color: var(--color-gray-600);
   font-size: 0.85rem;
 }
@@ -119,8 +132,7 @@
   }
 
   .legal-topbar {
-    flex-direction: column;
-    align-items: flex-start;
+    justify-content: flex-start;
   }
 
   .legal-hero,
@@ -130,6 +142,6 @@
   }
 
   .legal-section {
-    padding: 1rem;
+    padding: 1rem 0;
   }
 }

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import mainLogo from '../assets/images/MainLogo.png';
 import '../styles/LegalPages.css';
 
 const TermsOfService = () => {
@@ -9,14 +10,14 @@ const TermsOfService = () => {
     <div className="legal-page">
       <div className="legal-shell">
         <div className="legal-topbar">
-          <div className="legal-brand">MetaDoc</div>
-          <Link to="/" className="legal-nav-link">
-            Back to login
+          <Link to="/" className="legal-nav-link" aria-label="Back to login">
+            ←
           </Link>
         </div>
 
         <main className="legal-card">
           <section className="legal-hero">
+            <img src={mainLogo} alt="MetaDoc" className="legal-logo" />
             <h1 className="legal-title">Terms of Service</h1>
             <p className="legal-subtitle">
               These terms explain who may use MetaDoc, how the service may be used, and the responsibilities that apply when you sign in and submit or review academic documents.

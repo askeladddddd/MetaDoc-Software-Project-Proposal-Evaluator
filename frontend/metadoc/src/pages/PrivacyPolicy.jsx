@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import mainLogo from '../assets/images/MainLogo.png';
 import '../styles/LegalPages.css';
 
 const PrivacyPolicy = () => {
@@ -9,14 +10,14 @@ const PrivacyPolicy = () => {
     <div className="legal-page">
       <div className="legal-shell">
         <div className="legal-topbar">
-          <div className="legal-brand">MetaDoc</div>
-          <Link to="/" className="legal-nav-link">
-            Back to login
+          <Link to="/" className="legal-nav-link" aria-label="Back to login">
+            ←
           </Link>
         </div>
 
         <main className="legal-card">
           <section className="legal-hero">
+            <img src={mainLogo} alt="MetaDoc" className="legal-logo" />
             <h1 className="legal-title">Privacy Policy</h1>
             <p className="legal-subtitle">
               This policy explains what information MetaDoc collects, how it is used, and how it is protected when you sign in with Google and use the submission or evaluation features.
