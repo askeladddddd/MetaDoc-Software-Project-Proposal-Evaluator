@@ -100,10 +100,18 @@ const TokenBasedSubmission = () => {
     initData();
   }, [isAuthenticated]);
 
-  // Handle Redirection to Registration removed as backend handles it automatically
+  // Handle automatic redirect to login if auth failed
   useEffect(() => {
-    // No-op - redirecting to registration is no longer needed
-  }, [isAuthenticated, checkingRegistration, isRegistered, navigate]);
+    let timer;
+    if (isAuthenticated && !checkingRegistration && !isRegistered && !isProfessor) {
+      timer = setTimeout(() => {
+        logout();
+      }, 3000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isAuthenticated, checkingRegistration, isRegistered, isProfessor, logout]);
 
   const handleDriveLinkSubmit = async (e) => {
     e.preventDefault();
@@ -305,10 +313,10 @@ const TokenBasedSubmission = () => {
 
           <Button
             variant="primary"
-            onClick={() => window.location.reload()}
+            onClick={logout}
             className="submission-auth-failure-button"
           >
-            Refresh
+            Sign In
           </Button>
         </Card>
       </div>

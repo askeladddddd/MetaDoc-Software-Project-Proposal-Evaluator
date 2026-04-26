@@ -138,7 +138,7 @@ const OAuthCallback = () => {
                   onClick={handleStudentRefresh}
                 >
                   <RefreshCcw size={22} className="student-signin-icon" />
-                  <span>Refresh</span>
+                  <span>Sign In</span>
                 </button>
               </>
             )}
