@@ -113,7 +113,7 @@ const Dashboard = () => {
   const [selectedDeadline, setSelectedDeadline] = useState('');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState({ title: '', body: '' });
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
   const [recentGeneratedLinks, setRecentGeneratedLinks] = useState(() => loadActiveRecentLinks());
   const [recentLinksSearch, setRecentLinksSearch] = useState('');
 
@@ -126,6 +126,15 @@ const Dashboard = () => {
   useEffect(() => {
     localStorage.setItem(RECENT_LINKS_STORAGE_KEY, JSON.stringify(recentGeneratedLinks));
   }, [recentGeneratedLinks]);
+
+  useEffect(() => {
+    if (successMessage) {
+        const timer = setTimeout(() => {
+            setSuccessMessage(null);
+        }, 6000);
+        return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchOverview = async () => {
     try {
@@ -222,7 +231,7 @@ const Dashboard = () => {
 
       // Sync links from backend so generated links persist across logins/devices.
       fetchGeneratedLinks();
-      setShowSuccessModal(true);
+      setSuccessMessage('Submission link generated successfully.');
     } catch (err) {
       console.error('Failed to generate token:', err);
       const errorMsg = err.response?.data?.error || 'Failed to generate submission token. Please try again.';
@@ -514,6 +523,14 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {successMessage && (
+          <div className="import-success-banner" role="status" aria-live="polite">
+              <CheckCircle size={20} />
+              <span>{successMessage}</span>
+              <button className="error-close-btn success-close-btn" onClick={() => setSuccessMessage(null)}>×</button>
+          </div>
+      )}
+
       <div className="submission-link-banner-compact">
         <div className="compact-header">
           <ExternalLink size={20} />
@@ -717,28 +734,6 @@ const Dashboard = () => {
       >
         <p>{errorMessage.body}</p>
       </Modal>
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="modal-overlay" onClick={() => setShowSuccessModal(false)}>
-          <div className="modal-content success-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="success-icon">
-                <CheckCircle size={24} />
-              </div>
-              <h2>Generating Successful!</h2>
-            </div>
-            <div className="modal-body">
-              <p>The submission link has been successfully generated.</p>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowSuccessModal(false)}>
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -122,7 +122,7 @@ class DriveService:
             # Get file metadata
             metadata = service.files().get(
                 fileId=file_id,
-                fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser,permissions'
+                fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser,permissions,headRevisionId,version'
             ).execute()
             
             return metadata, None

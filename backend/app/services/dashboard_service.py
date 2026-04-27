@@ -860,9 +860,24 @@ class DashboardService:
                 'description': submission.deadline.description if submission.deadline else 'No specific description provided.'
             }
             
-            # Add contributor metadata for collaborative analysis
+            # Add contributor metadata and identify submitter for collaborative analysis
             if submission.analysis_result.document_metadata:
-                context['contributors'] = submission.analysis_result.document_metadata.get('contributors', [])
+                contributors = submission.analysis_result.document_metadata.get('contributors', [])
+                
+                # Identify the submitter in the contributors list for AI scoring
+                submitter_email = None
+                from app.models.student import Student
+                student = Student.query.filter_by(student_id=submission.student_id, professor_id=user_id).first()
+                if student and student.email:
+                    submitter_email = student.email.lower()
+                
+                for c in contributors:
+                    c_email = str(c.get('email', '')).lower()
+                    if submitter_email and c_email == submitter_email:
+                        c['is_submitter'] = True
+                
+                context['contributors'] = contributors
+                context['submitter_email'] = submitter_email
             
             evaluation, error = nlp_service.evaluate_with_rubric(
                 submission.analysis_result.document_text,
@@ -873,19 +888,27 @@ class DashboardService:
             if error:
                 return None, error
                 
-            # Recalculate total weighted score based on rubric weights
+            # Recalculate total weighted score based on rubric weights with fuzzy matching
             try:
-                criteria_map = {c.get('name'): float(c.get('weight', 0)) for c in rubric_data.get('criteria', [])}
+                criteria_list = rubric_data.get('criteria', [])
                 total_weighted_score = 0
                 total_found_weight = 0
                 
-                for eval_item in evaluation.get('rubric_evaluation', []):
-                    c_name = eval_item.get('criterion_name')
-                    c_score = float(eval_item.get('score', 0))
+                eval_items = evaluation.get('rubric_evaluation', [])
+                
+                for criterion in criteria_list:
+                    name = criterion.get('name')
+                    weight = float(criterion.get('weight', 0))
                     
-                    if c_name in criteria_map:
-                        weight = criteria_map[c_name]
-                        total_weighted_score += (c_score * (weight / 100.0))
+                    # Try to find matching evaluation item (exact or fuzzy)
+                    found_item = next((item for item in eval_items if item.get('criterion_name') == name), None)
+                    if not found_item:
+                        # Fuzzy match check
+                        found_item = next((item for item in eval_items if name.lower() in item.get('criterion_name', '').lower()), None)
+                    
+                    if found_item:
+                        score = float(found_item.get('score', 0))
+                        total_weighted_score += (score * (weight / 100.0))
                         total_found_weight += weight
                 
                 # Update the score in the evaluation dictionary
@@ -897,6 +920,9 @@ class DashboardService:
             # Update the analysis result with AI evaluation
             analysis = submission.analysis_result
             analysis.ai_summary = evaluation.get('ai_summary')
+            # Store full evaluation including contributor scores
+            analysis.ai_evaluation = evaluation
+            analysis.overall_score = evaluation.get('score', 0)
             
             # MERGE into nlp_results instead of overwriting to prevent data loss 
             # if local NLP analysis runs later.

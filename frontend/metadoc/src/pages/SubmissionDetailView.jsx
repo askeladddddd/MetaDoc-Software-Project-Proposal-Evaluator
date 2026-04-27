@@ -149,7 +149,7 @@ const SubmissionDetailView = () => {
       setLoading(true);
       setShowSuccessModal(false);
 
-      const response = await dashboardAPI.getSubmissionDetail(id, { forceRefresh: true });
+      const response = await dashboardAPI.getSubmissionDetail(id);
 
       setSubmission(response.data);
     } catch (err) {
@@ -329,10 +329,9 @@ const SubmissionDetailView = () => {
       if (errorMsg.includes('429')) {
         alert("Gemini AI Quota Exceeded. Please wait a minute before trying again.");
       } else if (errorMsg.includes('404')) {
-        alert("Gemini AI Model not found. Attempting to recover...");
+        setAnalysisError(`Error (404): ${errorMsg}`);
       } else {
-        setAnalysisError(`AI Evaluation Error: ${errorMsg}`);
-        alert(`AI Evaluation Error: ${errorMsg}`);
+        setAnalysisError(`Error: ${errorMsg}`);
       }
     } finally {
       setIsAnalyzing(false);
@@ -486,42 +485,60 @@ const SubmissionDetailView = () => {
                   return contributors.length > 0 ? (
                     contributors.map((contributor, index) => {
                       const role = normalizeContributorRole(contributor.role);
+                      
+                      let hasValidDate = !!(contributor.date && !isNaN(Date.parse(contributor.date)));
+                      
+                      // If an editor's activity date is identical to the author's, it implies no separate revision.
+                      if (hasValidDate && role.toLowerCase() !== 'author') {
+                        const author = contributors.find(c => normalizeContributorRole(c.role) === 'Author');
+                        if (author && author.date && contributor.date === author.date) {
+                          hasValidDate = false;
+                        }
+                      }
+
                       return (
                         <div key={index} className="contributor-item">
                           <div className="contributor-details">
                             <div className="contributor-name-row">
-                              <span className="contributor-name">{contributor.name}</span>
-                              <span className={`contributor-role-tag tag-${role.toLowerCase()}`}>
-                                {role}
+                              <span className="contributor-name">
+                                {contributor.email || contributor.name}
                               </span>
-                            </div>
-                            {(contributor.date || contributor.email) && (
-                              <div className="contributor-meta" title="Time of last document contribution">
-                                {contributor.date && !isNaN(Date.parse(contributor.date)) ? (
-                                  <>
-                                    <span className="meta-prefix">Last activity:</span>
-                                    <Calendar size={14} />
-                                    <span>
-                                      {new Date(contributor.date).toLocaleDateString([], {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric'
-                                      })}
-                                    </span>
-                                    <Clock size={14} className="ml-2" />
-                                    <span>
-                                      {new Date(contributor.date).toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        hour12: true
-                                      }).replace(/\s(?=[AP]M)/i, '')}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span>{contributor.email}</span>
+                              <div className="flex gap-1">
+                                <span className={`contributor-role-tag tag-${role.toLowerCase()}`}>
+                                  {role}
+                                </span>
+                                {contributor.is_submitter && (
+                                  <span className="contributor-role-tag tag-submitter">
+                                    SUBMITTER
+                                  </span>
                                 )}
                               </div>
-                            )}
+                            </div>
+                            <div className="contributor-meta" title="Time of last document contribution">
+                              {hasValidDate ? (
+                                <>
+                                  <span className="meta-prefix">Last activity:</span>
+                                  <Calendar size={14} />
+                                  <span>
+                                    {new Date(contributor.date).toLocaleDateString([], {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })}
+                                  </span>
+                                  <Clock size={14} className="ml-2" />
+                                  <span>
+                                    {new Date(contributor.date).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    }).replace(/\s(?=[AP]M)/i, '')}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 italic">No last activity</span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -677,6 +694,36 @@ const SubmissionDetailView = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Team Collaboration Analysis */}
+                  {analysis.ai_evaluation?.contributor_evaluations && analysis.ai_evaluation.contributor_evaluations.length > 0 && (
+                    <div className="ai-section-container">
+                      <h4 className="ai-section-title">
+                        <Users size={18} />
+                        Team Collaboration Analysis
+                      </h4>
+                      <p className="ai-section-description mb-4">{analysis.ai_evaluation.collaborative_analysis}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {analysis.ai_evaluation.contributor_evaluations.map((eval_item, idx) => (
+                          <div key={idx} className="contributor-eval-card">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <div className="font-semibold text-gray-800">{eval_item.name}</div>
+                                <div className="text-xs text-gray-500">{eval_item.email}</div>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <div className={`text-lg font-bold ${eval_item.contribution_score >= 80 ? 'text-green-600' : eval_item.contribution_score >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                  {eval_item.contribution_score}%
+                                </div>
+                                <div className="text-[10px] uppercase text-gray-400 font-bold">Contribution</div>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-600 italic">"{eval_item.feedback}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Detailed Rubric Evaluation */}
                   {analysis?.rubric_evaluation && (

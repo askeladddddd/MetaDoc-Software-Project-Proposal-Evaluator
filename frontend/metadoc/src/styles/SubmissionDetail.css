@@ -777,6 +777,49 @@
   margin-top: 4px;
 }
 
+.tag-submitter {
+  background-color: #faf5ff;
+  color: #6b21a8;
+  border: 1px solid #f3e8ff;
+}
+
+.contributor-eval-card {
+  background-color: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+}
+
+.contributor-eval-card:hover {
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.ai-section-container {
+  margin-bottom: 3rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ai-section-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ai-section-description {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.6;
+}
+
 /* Utils */
 @keyframes spin {
   to {

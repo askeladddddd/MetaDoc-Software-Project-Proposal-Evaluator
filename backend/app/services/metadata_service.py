@@ -373,6 +373,12 @@ class MetadataService:
             # Drive modifiedTime is authoritative for latest revision/edit time.
             if external_metadata.get('modifiedTime'):
                 metadata['last_modified_date'] = external_metadata.get('modifiedTime')
+
+            # [REVISION TRACKING] Store Drive revision IDs for future change detection
+            if external_metadata.get('headRevisionId'):
+                metadata['headRevisionId'] = external_metadata.get('headRevisionId')
+            if external_metadata.get('version'):
+                metadata['version'] = external_metadata.get('version')
                 
             # Prefer Drive IDs for Author/Editor if internal ones are default
             if metadata['author'] == 'Unavailable':

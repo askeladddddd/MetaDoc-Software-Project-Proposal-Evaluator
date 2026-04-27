@@ -133,7 +133,7 @@ const Deliverable = () => {
   // Folder Management State
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState(null);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [notification, setNotification] = useState(null);
   const [folderFormData, setFolderFormData] = useState({
     title: '',
     description: '',
@@ -188,19 +188,18 @@ const Deliverable = () => {
     }
   }, [viewMode, pagination.page, selectedDeadline, sortOption, teamCodeFilter, searchTerm]);
 
-  const fetchDeadlines = async () => {
+  const fetchDeadlines = async (showLoading = true) => {
     try {
-      setDeadlinesLoading(true);
-      const [response] = await Promise.all([
-        dashboardAPI.getDeadlines(true), // Include past
-        new Promise(resolve => setTimeout(resolve, 1200))
-      ]);
+      if (showLoading) setDeadlinesLoading(true);
+      const promises = [dashboardAPI.getDeadlines(true)];
+      if (showLoading) promises.push(new Promise(resolve => setTimeout(resolve, 1200)));
+      const [response] = await Promise.all(promises);
       setDeadlines(response.data.deadlines || []);
     } catch (err) {
       console.error('Failed to fetch deadlines:', err);
       setError('Failed to Connect to Server');
     } finally {
-      setDeadlinesLoading(false);
+      if (showLoading) setDeadlinesLoading(false);
     }
   };
 
@@ -333,17 +332,18 @@ const Deliverable = () => {
     try {
       if (editingFolder) {
         await dashboardAPI.updateDeadline(editingFolder.id, payload);
-        setShowSuccessModal('Edit Successful');
+        setNotification({ type: 'success', message: 'Deliverable saved!' });
       } else {
         await dashboardAPI.createDeadline(payload);
-        setShowSuccessModal('Create Successful');
+        setNotification({ type: 'success', message: 'Deliverable created!' });
       }
 
+      setTimeout(() => setNotification(null), 3000);
       setShowFolderModal(false);
       setFolderFormData({ title: '', description: '', deadline_datetime: '' });
       setEditingFolder(null);
       setFolderFormError(null);
-      fetchDeadlines();
+      fetchDeadlines(false);
     } catch (err) {
       console.error('Failed to save folder:', err);
       const errorMessage = err.response?.data?.error || 'Failed to save folder. Please try again.';
@@ -379,15 +379,21 @@ const Deliverable = () => {
       if (deleteType === 'submission') {
         await dashboardAPI.deleteSubmission(deleteTarget.id);
         setSubmissions(submissions.filter(s => s.id !== deleteTarget.id));
+        setNotification({ type: 'success', message: 'Submission deleted.' });
       } else if (deleteType === 'folder') {
         await dashboardAPI.deleteDeadline(deleteTarget.id);
         setDeadlines(deadlines.filter(d => d.id !== deleteTarget.id));
+        setNotification({ type: 'success', message: 'Deliverable deleted.' });
       }
       setShowDeleteModal(false);
       setDeleteTarget(null);
+      setTimeout(() => setNotification(null), 3000);
     } catch (err) {
       console.error('Delete failed:', err);
-      alert(`Failed to delete ${deleteType}`);
+      setNotification({ type: 'error', message: `Failed to delete ${deleteType}.` });
+      setTimeout(() => setNotification(null), 3000);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -994,7 +1000,13 @@ const Deliverable = () => {
   }
 
   return (
-    <div className="submissions-page">
+    <div className="submissions-page fade-in">
+      {notification && (
+        <div className={`notification notification-${notification.type} animate-slide-in`}>
+          {notification.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+          <span>{notification.message}</span>
+        </div>
+      )}
       {viewMode === 'folders' ? renderFolders() : renderFiles()}
 
       {/* --- MODALS --- */}
@@ -1286,27 +1298,6 @@ const Deliverable = () => {
         </div>
       )}
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="modal-overlay" onClick={() => setShowSuccessModal(false)}>
-          <div className="modal-content success-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="success-icon">
-                <CheckCircle size={24} />
-              </div>
-              <h2>{typeof showSuccessModal === 'string' ? showSuccessModal : 'Success!'}</h2>
-            </div>
-            <div className="modal-body">
-              <p>Deliverable has been successfully saved.</p>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowSuccessModal(false)}>
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <RubricEditorModal
         isOpen={isRubricModalOpen}
         onClose={() => setIsRubricModalOpen(false)}

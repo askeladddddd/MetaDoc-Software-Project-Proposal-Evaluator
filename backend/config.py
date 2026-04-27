@@ -70,7 +70,7 @@ class Config:
     # Fallback models list: tried in order when rate limit is hit
     GEMINI_FALLBACK_MODELS = _split_csv(
         os.environ.get('GEMINI_FALLBACK_MODELS'),
-        'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-1.5-flash'
+        'gemini-1.5-pro,gemini-1.5-flash,gemini-2.0-flash'
     )
     COLLAB_AI_MODE = 'gemini'
     COLLAB_AI_TIMEOUT_SECONDS = int(os.environ.get('COLLAB_AI_TIMEOUT_SECONDS') or 25)

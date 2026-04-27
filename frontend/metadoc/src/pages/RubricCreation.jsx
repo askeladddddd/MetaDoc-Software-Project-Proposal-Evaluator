@@ -32,8 +32,8 @@ const RubricCreation = () => {
     fetchRubrics();
   }, []);
 
-  const fetchRubrics = async () => {
-    setLoading(true);
+  const fetchRubrics = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const response = await rubricAPI.getRubrics();
       const dbRubrics = response.data;
@@ -45,7 +45,7 @@ const RubricCreation = () => {
       setError('Failed to Connect to Server');
       setRubrics([]);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -71,7 +71,7 @@ const RubricCreation = () => {
         await rubricAPI.createRubric(cleanedRubric);
       }
 
-      await fetchRubrics(); // Refresh list
+      await fetchRubrics(false); // Refresh list
       setNotification({ type: 'success', message: 'Rubric saved!' });
       setTimeout(() => setNotification(null), 3000);
     } catch (err) {
@@ -87,7 +87,7 @@ const RubricCreation = () => {
 
     try {
       await rubricAPI.deleteRubric(id);
-      await fetchRubrics();
+      setRubrics(prevRubrics => prevRubrics.filter(rubric => rubric.id !== id));
       setNotification({ type: 'success', message: 'Rubric deleted.' });
     } catch (err) {
       setNotification({ type: 'error', message: 'Failed to delete.' });

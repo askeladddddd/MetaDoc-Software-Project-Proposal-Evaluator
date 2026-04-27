@@ -113,19 +113,29 @@ def _refresh_drive_submission_analysis(submission, force_refresh=False):
 
     remote_modified = _to_naive_utc(_parse_iso_datetime(drive_meta.get('modifiedTime')))
     local_processed = _to_naive_utc(submission.processing_completed_at)
+    
+    # [REVISION TRACKING] Use headRevisionId for definitive change detection
+    current_revision_id = drive_meta.get('headRevisionId')
+    stored_revision_id = None
+    if submission.analysis_result and submission.analysis_result.document_metadata:
+        stored_revision_id = submission.analysis_result.document_metadata.get('headRevisionId')
+
     has_stats = (
         submission.analysis_result is not None and
         bool(submission.analysis_result.content_statistics)
     )
 
-    if (
-        not force_refresh and
-        has_stats and
-        remote_modified and
-        local_processed and
-        remote_modified <= local_processed
-    ):
-        return False, None
+    # Check if we can skip the refresh
+    is_same_revision = stored_revision_id and current_revision_id and (stored_revision_id == current_revision_id)
+    is_up_to_date_time = remote_modified and local_processed and (remote_modified <= local_processed)
+
+    if not force_refresh and has_stats:
+        if current_revision_id:
+            if is_same_revision:
+                return False, None
+        elif is_up_to_date_time:
+            # Fallback to timestamp if revision ID is unavailable
+            return False, None
 
     filename = f"refresh_{submission.id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.docx"
     temp_path, download_error = drive_service.download_file(
@@ -180,6 +190,14 @@ def _refresh_drive_submission_analysis(submission, force_refresh=False):
     analysis.document_text = text
     analysis.is_complete_document = is_complete
     analysis.validation_warnings = warnings
+
+    # [RE-EVALUATION] Clear previous AI evaluation to trigger automatic re-analysis 
+    # of the new document version in the frontend.
+    analysis.nlp_results = {}
+    analysis.ai_insights = {}
+    analysis.ai_summary = None
+    analysis.updated_at = datetime.utcnow()
+    current_app.logger.info(f"AI Evaluation reset for submission {submission.id} due to document change")
 
     submission.file_path = target_path
     submission.file_size = os.path.getsize(target_path) if os.path.exists(target_path) else submission.file_size
