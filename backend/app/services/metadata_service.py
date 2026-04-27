@@ -191,7 +191,19 @@ class MetadataService:
                 if match_found:
                     # Enrich existing record
                     if not entry.get('email') and email: entry['email'] = email
-                    if not entry.get('date') and date: entry['date'] = date
+                    
+                    # Update date if provided and newer (or if existing date is missing)
+                    if date:
+                        if not entry.get('date'):
+                            entry['date'] = date
+                        else:
+                            try:
+                                # Compare ISO strings or datetime objects
+                                if str(date) > str(entry['date']):
+                                    entry['date'] = date
+                            except Exception:
+                                # Fallback to just overwriting if comparison fails
+                                entry['date'] = date
                     
                     # Prefer Author/Editor role labels.
                     high_priority_roles = ['Author', 'Editor']
@@ -437,12 +449,6 @@ class MetadataService:
         if metadata['author'] == 'Unavailable' and metadata['last_editor'] != 'Unavailable':
             metadata['author'] = metadata['last_editor']
 
-        # Sync back to contributors one last time to ensure author/editor are listed with roles
-        if metadata['author'] != 'Unavailable':
-            add_contributor(metadata['author'], 'Author', date=metadata['creation_date'])
-        if metadata['last_editor'] != 'Unavailable':
-            add_contributor(metadata['last_editor'], 'Editor', date=metadata['last_modified_date'])
-
         # Final filesystem fallback for dates
         if not metadata['creation_date']:
             try:
@@ -454,6 +460,12 @@ class MetadataService:
                 m_time = os.path.getmtime(file_path)
                 metadata['last_modified_date'] = datetime.fromtimestamp(m_time).isoformat()
             except Exception: pass
+
+        # Sync back to contributors one last time to ensure author/editor are listed with roles
+        if metadata['author'] != 'Unavailable':
+            add_contributor(metadata['author'], 'Author', date=metadata['creation_date'])
+        if metadata['last_editor'] != 'Unavailable':
+            add_contributor(metadata['last_editor'], 'Editor', date=metadata['last_modified_date'])
             
         # Limit to 10 unique contributors
         if isinstance(metadata['contributors'], list):
@@ -463,11 +475,23 @@ class MetadataService:
 
     
     def extract_document_text(self, file_path):
-        """Extract full text content from DOCX file"""
+        """Extract full text content from DOCX file including headers, footers, and shapes"""
         try:
             doc = Document(file_path)
             
-            # Extract text from paragraphs
+            # 1. Extract from Headers and Footers
+            hf_text = []
+            for section in doc.sections:
+                for header in [section.header, section.first_page_header, section.even_page_header]:
+                    if header:
+                        for p in header.paragraphs:
+                            if p.text.strip(): hf_text.append(p.text.strip())
+                for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+                    if footer:
+                        for p in footer.paragraphs:
+                            if p.text.strip(): hf_text.append(p.text.strip())
+
+            # 2. Extract text from paragraphs (Main Body)
             paragraphs = []
             for paragraph in doc.paragraphs:
                 has_page_break = False
@@ -480,10 +504,9 @@ class MetadataService:
                 if paragraph.text.strip():
                     paragraphs.append(paragraph.text.strip())
                 if has_page_break:
-                    # Keep explicit page delimiters so page counting can use real breaks.
                     paragraphs.append('\f')
             
-            # Extract text from tables
+            # 3. Extract text from tables
             table_text = []
             for table in doc.tables:
                 for row in table.rows:
@@ -491,12 +514,51 @@ class MetadataService:
                         if cell.text.strip():
                             table_text.append(cell.text.strip())
             
-            # Combine all text
-            full_text = '\n'.join(paragraphs)
-            if table_text:
-                full_text += '\n' + '\n'.join(table_text)
+            # 4. Extract from Shapes / Textboxes (Requires XML traversal)
+            shape_text = []
+            try:
+                # Direct XML search for text boxes which are often missed by python-docx
+                xml_content = doc._element.xml
+                # Find all w:t tags (text) inside w:txbxContent (text box content)
+                # This is a bit brute-force but effective for modern DOCX
+                root = ET.fromstring(xml_content)
+                W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                W_T = f'{{{W_NS}}}t'
+                W_TXBX = f'{{{W_NS}}}txbxContent'
+                
+                for txbx in root.findall(f'.//{W_TXBX}'):
+                    parts = []
+                    for t in txbx.findall(f'.//{W_T}'):
+                        if t.text: parts.append(t.text)
+                    if parts:
+                        shape_text.append(' '.join(parts).strip())
+            except Exception as xml_err:
+                current_app.logger.warning(f"Shape text extraction failed: {xml_err}")
+
+            # Combine all text with logical separation
+            full_parts = []
+            if hf_text:
+                full_parts.append("--- DOCUMENT HEADERS/FOOTERS ---")
+                full_parts.extend(hf_text)
             
+            if paragraphs:
+                full_parts.append("--- MAIN BODY ---")
+                full_parts.extend(paragraphs)
+            
+            if table_text:
+                full_parts.append("--- TABLE CONTENT ---")
+                full_parts.extend(table_text)
+                
+            if shape_text:
+                full_parts.append("--- TEXT BOXES/SHAPES ---")
+                full_parts.extend(shape_text)
+            
+            full_text = '\n'.join(full_parts)
             return full_text, None
+            
+        except Exception as e:
+            current_app.logger.error(f"Text extraction failed: {e}")
+            return None, f"Text extraction error: {e}"
             
         except Exception as e:
             current_app.logger.error(f"Text extraction failed: {e}")

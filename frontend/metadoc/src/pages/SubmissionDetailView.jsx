@@ -61,7 +61,15 @@ const SubmissionDetailView = () => {
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('Initializing...');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
   const hasAttemptedAutoAnalysis = useRef(false);
+
+  useEffect(() => {
+    if (analysisError) {
+      const timer = setTimeout(() => setAnalysisError(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [analysisError]);
 
   useEffect(() => {
     fetchSubmissionDetail();
@@ -142,7 +150,7 @@ const SubmissionDetailView = () => {
       setShowSuccessModal(false);
 
       const response = await dashboardAPI.getSubmissionDetail(id, { forceRefresh: true });
-      
+
       setSubmission(response.data);
     } catch (err) {
       setError('Failed to load submission details');
@@ -278,7 +286,7 @@ const SubmissionDetailView = () => {
         currentStep++;
         const targetProgress = Math.min(95, (currentStep / steps) * 95);
         setProgress(targetProgress);
-        
+
         if (targetProgress < 30) setProgressText('Reading document context...');
         else if (targetProgress < 60) setProgressText('Evaluating against rubric...');
         else if (targetProgress < 90) setProgressText('Synthesizing feedback...');
@@ -287,11 +295,11 @@ const SubmissionDetailView = () => {
 
       // 2. Call the real AI evaluation API
       const response = await dashboardAPI.runAIEvaluation(id, activeRubric);
-      
+
       clearInterval(progressInterval);
       setProgress(100);
       setProgressText('Complete');
-      
+
       // Wait for 1 second at 100% before completing analysis
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -305,6 +313,7 @@ const SubmissionDetailView = () => {
       }));
 
       setShowSuccessModal(true);
+      setAnalysisError(null);
       setTimeout(() => setShowSuccessModal(false), 4000);
 
       // If we are in a "Pending" state, refresh the whole submission to get the 'Completed' status
@@ -322,6 +331,7 @@ const SubmissionDetailView = () => {
       } else if (errorMsg.includes('404')) {
         alert("Gemini AI Model not found. Attempting to recover...");
       } else {
+        setAnalysisError(`AI Evaluation Error: ${errorMsg}`);
         alert(`AI Evaluation Error: ${errorMsg}`);
       }
     } finally {
@@ -337,7 +347,7 @@ const SubmissionDetailView = () => {
           <span>Report Generated Successfully!</span>
         </div>
       )}
-      
+
       <button className="btn btn-ghost mb-lg" onClick={handleBack}>
         <ArrowLeft size={20} />
         Back
@@ -346,9 +356,6 @@ const SubmissionDetailView = () => {
       <div className="detail-header">
         <div className="detail-title-section">
           <h1>{submission.original_filename}</h1>
-          <Badge variant={getStatusColor(submission.status)}>
-            {submission.status}
-          </Badge>
         </div>
 
         <button className="btn btn-primary btn-sm" onClick={handleViewFile} title="View original file">
@@ -422,16 +429,17 @@ const SubmissionDetailView = () => {
                 </span>
               </div>
               <div className="info-item">
-                <span className="info-label">Last Modified</span>
+                <span className="info-label">Last Activity</span>
                 <span className="info-value">
                   {(analysis.document_metadata.modified_date || analysis.document_metadata.last_modified_date)
                     ? new Date(analysis.document_metadata.modified_date || analysis.document_metadata.last_modified_date).toLocaleString([], {
                       year: 'numeric',
-                      month: 'numeric',
+                      month: 'long',
                       day: 'numeric',
-                      hour: 'numeric',
+                      hour: '2-digit',
                       minute: '2-digit',
-                    })
+                      hour12: true
+                    }).replace(/\s(?=[AP]M)/i, '')
                     : 'Unavailable'}
                 </span>
               </div>
@@ -496,16 +504,17 @@ const SubmissionDetailView = () => {
                                     <span>
                                       {new Date(contributor.date).toLocaleDateString([], {
                                         year: 'numeric',
-                                        month: 'short',
+                                        month: 'long',
                                         day: 'numeric'
                                       })}
                                     </span>
                                     <Clock size={14} className="ml-2" />
                                     <span>
                                       {new Date(contributor.date).toLocaleTimeString([], {
-                                        hour: 'numeric',
-                                        minute: '2-digit'
-                                      })}
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: true
+                                      }).replace(/\s(?=[AP]M)/i, '')}
                                     </span>
                                   </>
                                 ) : (
@@ -531,9 +540,25 @@ const SubmissionDetailView = () => {
         <div className="card-full-width">
           <Card
             title={
-              <div className="flex items-center gap-2">
-                <FileText size={20} />
-                <span>Analysis & Evaluation based on Criteria</span>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <FileText size={20} />
+                  <span>AI Analysis & Evaluation</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {showSuccessModal && (
+                    <Badge variant="success">
+                      <CheckCircle size={12} className="mr-1" />
+                      Success
+                    </Badge>
+                  )}
+                  {analysisError && (
+                    <Badge variant="error">
+                      <AlertCircle size={12} className="mr-1" />
+                      Error
+                    </Badge>
+                  )}
+                </div>
               </div>
             }
             className="h-full"
@@ -570,29 +595,42 @@ const SubmissionDetailView = () => {
                 </div>
               )}
 
-              {isAnalyzing && (
-                <div className="processing-card is-analyzing-card">
+              {isAnalyzing || showSuccessModal || analysisError ? (
+                <div className={`processing-card is-analyzing-card ${analysisError ? 'has-error' : ''} ${showSuccessModal ? 'is-completed' : ''}`}>
                   <div className="processing-header-row">
                     <div className="processing-icon-box">
-                      <img src={logo4} alt="Loading" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+                      {analysisError ? (
+                        <AlertCircle size={24} className="text-error" />
+                      ) : showSuccessModal ? (
+                        <CheckCircle size={24} className="text-success" />
+                      ) : (
+                        <img src={logo4} alt="Loading" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+                      )}
                     </div>
-                    <h3 className="processing-title">Generating Report...</h3>
+                    <h3 className="processing-title">
+                      {analysisError ? 'Analysis Failed' : showSuccessModal ? 'Report Completed!' : 'Generating Report...'}
+                    </h3>
                   </div>
                   <div className="processing-progress-container">
                     <div className="processing-progress-bar-bg">
-                      <div 
-                        className="processing-progress-bar-fill" 
-                        style={{ width: `${progress}%` }}
+                      <div
+                        className={`processing-progress-bar-fill ${analysisError ? 'bg-error' : showSuccessModal ? 'bg-success' : ''}`}
+                        style={{ width: `${analysisError ? 100 : progress}%` }}
                       ></div>
                     </div>
                   </div>
                   <div className="processing-footer-row">
-                    <span className="processing-subtext">{progressText}</span>
-                    <span className="processing-percentage">{Math.round(progress)}%</span>
+                    <span className="processing-subtext">
+                      {analysisError ? analysisError : showSuccessModal ? 'The AI analysis has been successfully generated.' : progressText}
+                    </span>
+                    <span className="processing-percentage">
+                      {analysisError ? 'Error' : showSuccessModal ? '100%' : `${Math.round(progress)}%`}
+                    </span>
                   </div>
                 </div>
-              )}
-              {(!isAnalyzing && (!analysis || !analysis.rubric_evaluation || analysis.rubric_evaluation.length === 0)) && (
+              ) : null}
+
+              {(!isAnalyzing && !showSuccessModal && !analysisError && (!analysis || !analysis.rubric_evaluation || analysis.rubric_evaluation.length === 0)) && (
                 <div className="unavailable-state">
                   <AlertCircle size={32} className="text-slate-300" />
                   <h4>Analysis Unavailable</h4>
@@ -600,7 +638,7 @@ const SubmissionDetailView = () => {
                 </div>
               )}
 
-              {analysis?.ai_summary && !isAnalyzing && (
+              {analysis?.ai_summary && !isAnalyzing && !showSuccessModal && !analysisError && (
                 <div className="ai-analysis-container">
                   {/* Executive Summary */}
                   <div className="ai-exec-summary">

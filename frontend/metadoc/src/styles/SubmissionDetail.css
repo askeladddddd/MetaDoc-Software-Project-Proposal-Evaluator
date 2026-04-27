@@ -613,7 +613,7 @@
   padding: 2rem;
   width: 400px;
   max-width: 90vw;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08), 0 1px 5px rgba(0,0,0,0.02);
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08), 0 1px 5px rgba(0, 0, 0, 0.02);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -640,7 +640,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .processing-title {
@@ -682,6 +682,32 @@
   color: #1e293b;
 }
 
+.processing-card.has-error {
+  border-color: #fee2e2;
+  background-color: #fffbfa;
+}
+
+.processing-card.is-completed {
+  border-color: #dcfce7;
+  background-color: #f6fdf9;
+}
+
+.bg-error {
+  background-color: #ef4444 !important;
+}
+
+.bg-success {
+  background-color: #10b981 !important;
+}
+
+.text-error {
+  color: #ef4444 !important;
+}
+
+.text-success {
+  color: #10b981 !important;
+}
+
 /* Success Modal Header */
 .success-header-modal {
   background-color: #ecfdf5;
@@ -698,8 +724,15 @@
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ai-criterion-name {

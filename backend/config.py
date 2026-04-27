@@ -66,8 +66,12 @@ class Config:
     
     # Gemini AI Configuration
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash'
-    GEMINI_FALLBACK_MODEL = os.environ.get('GEMINI_FALLBACK_MODEL') or 'gemini-2.5-flash-lite'
+    GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-2.0-flash'
+    # Fallback models list: tried in order when rate limit is hit
+    GEMINI_FALLBACK_MODELS = _split_csv(
+        os.environ.get('GEMINI_FALLBACK_MODELS'),
+        'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-1.5-flash'
+    )
     COLLAB_AI_MODE = 'gemini'
     COLLAB_AI_TIMEOUT_SECONDS = int(os.environ.get('COLLAB_AI_TIMEOUT_SECONDS') or 25)
     COLLAB_SESSION_WINDOW_MINUTES = int(os.environ.get('COLLAB_SESSION_WINDOW_MINUTES') or 30)

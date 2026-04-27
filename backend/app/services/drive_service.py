@@ -245,23 +245,19 @@ class DriveService:
 
     def _get_gemini_model_name(self):
         """Resolve Gemini model name with a safe default."""
-        model_name = str(current_app.config.get('GEMINI_MODEL') or 'gemini-2.5-flash').strip()
-        deprecated = {'gemini-2.0-flash', 'gemini-2.0-flash-lite'}
-        if model_name in deprecated:
-            current_app.logger.warning(
-                f"Deprecated Gemini model '{model_name}' requested. Auto-switching to 'gemini-2.5-flash'."
-            )
-            return 'gemini-2.5-flash'
+        model_name = str(current_app.config.get('GEMINI_MODEL') or 'gemini-1.5-flash').strip()
+        # Auto-switch for potentially invalid future-dated strings
+        if '2.5' in model_name:
+             return 'gemini-1.5-flash'
         return model_name
 
     def _get_gemini_model_candidates(self):
         """Primary model plus automatic fallback model candidates."""
         primary = self._get_gemini_model_name()
-        fallback = str(current_app.config.get('GEMINI_FALLBACK_MODEL') or 'gemini-2.5-flash-lite').strip()
+        fallback = str(current_app.config.get('GEMINI_FALLBACK_MODEL') or 'gemini-1.5-flash').strip()
 
-        deprecated = {'gemini-2.0-flash', 'gemini-2.0-flash-lite'}
-        if fallback in deprecated:
-            fallback = 'gemini-2.5-flash-lite'
+        if '2.5' in fallback:
+            fallback = 'gemini-1.5-flash'
 
         candidates = []
         for item in [primary, fallback]:
