@@ -25,6 +25,21 @@ def _normalize_iso_datetime(value: Any) -> Optional[str]:
     return iso_value
 
 
+def _ensure_dict(data: Any) -> Dict[str, Any]:
+    """Ensure the provided data is a dictionary. Parses JSON strings if necessary."""
+    if not data:
+        return {}
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        import json
+        try:
+            return json.loads(data)
+        except Exception:
+            return {}
+    return {}
+
+
 def _resolve_last_modified_iso(submission) -> Optional[str]:
     """Prefer document metadata modified date, fallback to submission timestamps."""
     metadata_modified = None
@@ -40,7 +55,7 @@ def _resolve_last_modified_iso(submission) -> Optional[str]:
             return None
 
     if hasattr(submission, 'analysis_result') and submission.analysis_result:
-        metadata = submission.analysis_result.document_metadata or {}
+        metadata = _ensure_dict(submission.analysis_result.document_metadata)
         metadata_modified = metadata.get('last_modified_date') or metadata.get('modified_date')
 
         contributors = metadata.get('contributors') if isinstance(metadata, dict) else None
@@ -74,7 +89,7 @@ def _get_document_metadata_last_modified_iso(submission) -> Optional[str]:
     if not (hasattr(submission, 'analysis_result') and submission.analysis_result):
         return None
 
-    metadata = submission.analysis_result.document_metadata or {}
+    metadata = _ensure_dict(submission.analysis_result.document_metadata)
     metadata_modified = metadata.get('last_modified_date') or metadata.get('modified_date')
     return _normalize_iso_datetime(metadata_modified)
 
@@ -145,7 +160,8 @@ class SubmissionListDTO:
         word_count = None
         if hasattr(submission, 'analysis_result') and submission.analysis_result:
             if submission.analysis_result.content_statistics:
-                word_count = submission.analysis_result.content_statistics.get('word_count')
+                content_stats = _ensure_dict(submission.analysis_result.content_statistics)
+                word_count = content_stats.get('word_count')
         
         submitted_at_value = getattr(submission, 'submitted_at', None) or submission.created_at
         submitted_at_iso = submitted_at_value.isoformat() if submitted_at_value else None

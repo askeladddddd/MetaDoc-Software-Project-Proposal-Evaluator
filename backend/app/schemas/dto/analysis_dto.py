@@ -3,6 +3,21 @@ Analysis-related Data Transfer Objects
 """
 
 from typing import Optional, Dict, Any, List
+import json
+
+
+def _ensure_dict(data: Any) -> Dict[str, Any]:
+    """Ensure the provided data is a dictionary. Parses JSON strings if necessary."""
+    if not data:
+        return {}
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        try:
+            return json.loads(data)
+        except Exception:
+            return {}
+    return {}
 
 
 class MetadataDTO:
@@ -11,6 +26,7 @@ class MetadataDTO:
     @staticmethod
     def serialize(metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Serialize document metadata"""
+        metadata = _ensure_dict(metadata)
         if not metadata:
             return {}
         
@@ -38,6 +54,7 @@ class ContentStatisticsDTO:
     @staticmethod
     def serialize(statistics: Dict[str, Any]) -> Dict[str, Any]:
         """Serialize content statistics"""
+        statistics = _ensure_dict(statistics)
         if not statistics:
             return {}
         
@@ -58,6 +75,7 @@ class HeuristicInsightsDTO:
     @staticmethod
     def serialize(insights: Dict[str, Any]) -> Dict[str, Any]:
         """Serialize heuristic insights"""
+        insights = _ensure_dict(insights)
         if not insights:
             return {}
         
@@ -79,6 +97,7 @@ class NLPResultDTO:
     @staticmethod
     def serialize(nlp_results: Dict[str, Any]) -> Dict[str, Any]:
         """Serialize NLP analysis results"""
+        nlp_results = _ensure_dict(nlp_results)
         if not nlp_results:
             return {}
         
@@ -107,8 +126,8 @@ class AnalysisResultDTO:
             return None
         
         # Extract rubric evaluation data from nlp_results or ai_insights (backup)
-        nlp_raw = analysis.nlp_results or {}
-        ai_raw = analysis.ai_insights or {}
+        nlp_raw = _ensure_dict(analysis.nlp_results)
+        ai_raw = _ensure_dict(analysis.ai_insights)
         
         # Merge them to find rubric fields, prioritizing whichever has 'rubric_evaluation'
         eval_source = nlp_raw if nlp_raw.get('rubric_evaluation') else ai_raw
@@ -124,8 +143,8 @@ class AnalysisResultDTO:
             'nlp_results': NLPResultDTO.serialize(analysis.nlp_results) if analysis.nlp_results else {},
             'flesch_kincaid_score': analysis.flesch_kincaid_score,
             'readability_grade': analysis.readability_grade,
-            'named_entities': analysis.named_entities,
-            'top_terms': analysis.top_terms,
+            'named_entities': _ensure_dict(analysis.named_entities) if analysis.named_entities else [],
+            'top_terms': _ensure_dict(analysis.top_terms) if analysis.top_terms else [],
             
             # AI evaluation fields
             'ai_summary': analysis.ai_summary or eval_source.get('ai_summary'),
@@ -138,13 +157,41 @@ class AnalysisResultDTO:
             
             'ai_insights': analysis.ai_insights,
             'is_complete_document': analysis.is_complete_document,
-            'validation_warnings': analysis.validation_warnings,
+            'validation_warnings': _ensure_dict(analysis.validation_warnings) if analysis.validation_warnings else [],
             'analysis_version': analysis.analysis_version,
             'processing_duration_seconds': analysis.processing_duration_seconds,
-            'created_at': analysis.created_at.isoformat() if hasattr(analysis, 'created_at') else None,
-            'updated_at': analysis.updated_at.isoformat() if hasattr(analysis, 'updated_at') else None
+            'created_at': analysis.created_at.isoformat() if hasattr(analysis, 'created_at') and analysis.created_at else None,
+            'updated_at': analysis.updated_at.isoformat() if hasattr(analysis, 'updated_at') and analysis.updated_at else None
         }
         
+        # fix: some json columns like top_terms/named_entities might actually be arrays, not dicts
+        if analysis.named_entities and isinstance(analysis.named_entities, list):
+            data['named_entities'] = analysis.named_entities
+        elif analysis.named_entities and isinstance(analysis.named_entities, str):
+            try:
+                parsed = json.loads(analysis.named_entities)
+                data['named_entities'] = parsed if isinstance(parsed, list) else []
+            except:
+                data['named_entities'] = []
+                
+        if analysis.top_terms and isinstance(analysis.top_terms, list):
+            data['top_terms'] = analysis.top_terms
+        elif analysis.top_terms and isinstance(analysis.top_terms, str):
+            try:
+                parsed = json.loads(analysis.top_terms)
+                data['top_terms'] = parsed if isinstance(parsed, list) else []
+            except:
+                data['top_terms'] = []
+                
+        if analysis.validation_warnings and isinstance(analysis.validation_warnings, list):
+            data['validation_warnings'] = analysis.validation_warnings
+        elif analysis.validation_warnings and isinstance(analysis.validation_warnings, str):
+            try:
+                parsed = json.loads(analysis.validation_warnings)
+                data['validation_warnings'] = parsed if isinstance(parsed, list) else []
+            except:
+                data['validation_warnings'] = []
+                
         if include_full_text and hasattr(analysis, 'document_text'):
             data['document_text'] = analysis.document_text
         
@@ -156,13 +203,16 @@ class AnalysisResultDTO:
         if not analysis:
             return None
         
+        content_stats = _ensure_dict(analysis.content_statistics) if analysis.content_statistics else {}
+        
         return {
             'id': analysis.id,
             'submission_id': analysis.submission_id,
-            'word_count': analysis.content_statistics.get('word_count') if analysis.content_statistics else None,
+            'word_count': content_stats.get('word_count'),
             'flesch_kincaid_score': analysis.flesch_kincaid_score,
             'readability_grade': analysis.readability_grade,
             'timeliness_classification': analysis.timeliness_classification.value if hasattr(analysis, 'timeliness_classification') and analysis.timeliness_classification else None,
             'is_complete_document': analysis.is_complete_document,
-            'created_at': analysis.created_at.isoformat() if hasattr(analysis, 'created_at') else None
+            'created_at': analysis.created_at.isoformat() if hasattr(analysis, 'created_at') and analysis.created_at else None
         }
+
