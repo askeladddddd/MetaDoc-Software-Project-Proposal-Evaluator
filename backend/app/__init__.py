@@ -7,6 +7,7 @@ Main application factory and initialization.
 import os
 import logging
 from flask import Flask
+from flask_cors import CORS
 from config import config
 
 # Import core extensions
@@ -23,6 +24,9 @@ def create_app(config_name=None):
     # Create Flask app
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    # Enable CORS for frontend domain
+    CORS(app, origins=["https://metadoc-eight.vercel.app"])
     
     # CRITICAL: Trust reverse proxies (like Render) so Secure cookies work properly
     from werkzeug.middleware.proxy_fix import ProxyFix
