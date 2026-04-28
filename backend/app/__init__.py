@@ -26,7 +26,16 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
 
     # Enable CORS for frontend domain using config
-    CORS(app, origins=app.config.get('CORS_ORIGINS', ["https://metadoc-eight.vercel.app"]), supports_credentials=True)
+    cors_origins = app.config.get('CORS_ORIGINS', [])
+    if isinstance(cors_origins, str):
+        cors_origins = [cors_origins]
+    elif not isinstance(cors_origins, list):
+        cors_origins = list(cors_origins)
+    
+    if "https://metadoc-eight.vercel.app" not in cors_origins:
+        cors_origins.append("https://metadoc-eight.vercel.app")
+        
+    CORS(app, origins=cors_origins, supports_credentials=True)
     
     # CRITICAL: Trust reverse proxies (like Render) so Secure cookies work properly
     from werkzeug.middleware.proxy_fix import ProxyFix
