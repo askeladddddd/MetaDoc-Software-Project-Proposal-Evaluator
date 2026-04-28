@@ -114,18 +114,16 @@ DATABASE_URL=sqlite:///metadoc.db
 |---------|----------|
 | **"Command not found: python"** | Install Python 3.10+ from python.org |
 | **PowerShell execution error** | Run: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| **Port 5000 already in use** | Kill process: `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess \| Stop-Process` |
+| **Port 5000 already in use** | Kill process: `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess | Stop-Process` |
 | **pip install fails** | Try: `pip install --upgrade pip` then retry |
 | **Frontend won't load** | Make sure backend is running on port 5000 |
-| **Collaborative Effort Report fails** | Sign in as professor using Google OAuth (not basic login), and ensure file is a native Google Doc |
+| **Collaborative Effort Report fails** | Sign in as professor using Google OAuth, and ensure file is a native Google Doc |
 
 ---
 
 ## 📚 For More Details
 
-- **[Backend Setup](SETUP_INSTRUCTIONS.md)** - Detailed configuration
-- **[System Summary](METADOC_FINAL_SUMMARY.md)** - Architecture & features
-- **[Sidebar Toggle](SIDEBAR_TOGGLE_IMPLEMENTATION.md)** - UI features
+- **[Main Project Guide](README.md)** - Architecture & features
 
 ---
 
