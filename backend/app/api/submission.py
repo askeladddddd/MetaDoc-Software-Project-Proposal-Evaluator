@@ -149,15 +149,17 @@ def perform_full_analysis(app, submission_id):
             app.logger.info(f"Background analysis completed for submission {submission_id}")
             
         except Exception as e:
-            app.logger.error(f"Background analysis failed for submission {submission_id}: {e}")
+            error_msg = str(e)
+            app.logger.error(f"Background analysis failed for submission {submission_id}: {error_msg}")
             try:
                 db.session.rollback()
                 submission = Submission.query.get(submission_id)
                 if submission:
                     submission.status = SubmissionStatus.FAILED
+                    submission.error_message = f"Analysis Error: {error_msg}"
                     db.session.commit()
-            except:
-                pass
+            except Exception as rollback_err:
+                app.logger.error(f"Failed to record analysis failure: {rollback_err}")
 
 
 def normalize_semester(raw_semester):
@@ -868,7 +870,16 @@ def submit_drive_link():
         
         # Calculate file hash
         file_hash = submission_service.calculate_file_hash(file_path)
-        file_size = int(metadata.get('size', os.path.getsize(file_path)))
+        
+        # Safely get file size from metadata or local file
+        metadata_size = metadata.get('size')
+        if metadata_size is not None:
+            try:
+                file_size = int(metadata_size)
+            except (ValueError, TypeError):
+                file_size = os.path.getsize(file_path)
+        else:
+            file_size = os.path.getsize(file_path)
         
         # Check for duplicate submission (by hash and by drive link)
         is_duplicate, existing_submission = submission_service.check_duplicate_submission(

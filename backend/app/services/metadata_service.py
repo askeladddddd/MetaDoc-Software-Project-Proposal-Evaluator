@@ -235,6 +235,8 @@ class MetadataService:
             
             if core_props.author:
                 metadata['author'] = core_props.author
+                # Also register as a contributor for report consistency
+                add_contributor(core_props.author, 'Author', date=core_props.created.isoformat() if core_props.created else None)
             
             if core_props.created:
                 metadata['creation_date'] = core_props.created.isoformat()
@@ -244,6 +246,8 @@ class MetadataService:
             
             if core_props.last_modified_by:
                 metadata['last_editor'] = core_props.last_modified_by
+                # Also register as a contributor for report consistency
+                add_contributor(core_props.last_modified_by, 'Editor', date=core_props.modified.isoformat() if core_props.modified else None)
             
             if hasattr(core_props, 'revision') and core_props.revision:
                 try:

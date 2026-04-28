@@ -762,9 +762,12 @@ class NLPService:
                 
                 try:
                     evaluation = json.loads(raw_text.strip())
+                    
+                    # Safely handle submission_context which might be None
+                    context = submission_context or {}
                     evaluation['integrity_warning'] = integrity.get('reason') if integrity.get('is_suspicious') else None
-                    evaluation['image_density_warning'] = submission_context.get('image_density_warning', False)
-                    evaluation['image_count'] = submission_context.get('image_count', 0)
+                    evaluation['image_density_warning'] = context.get('image_density_warning', False)
+                    evaluation['image_count'] = context.get('image_count', 0)
                     
                     if current_app:
                         current_app.logger.info(f"Rubric evaluation completed with model: {model_used}")
