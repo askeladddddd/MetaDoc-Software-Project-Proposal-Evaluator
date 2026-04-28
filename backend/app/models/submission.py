@@ -81,8 +81,20 @@ class Submission(BaseModel):
         """Return a summary of the analysis results"""
         if not self.analysis_result:
             return None
+            
+        # Safely handle potential stringified JSON
+        stats = self.analysis_result.content_statistics
+        if isinstance(stats, str):
+            import json
+            try:
+                stats = json.loads(stats)
+            except:
+                stats = {}
+        elif not stats:
+            stats = {}
+            
         return {
-            'word_count': self.analysis_result.content_statistics.get('word_count') if self.analysis_result.content_statistics else None,
+            'word_count': stats.get('word_count') if isinstance(stats, dict) else None,
             'readability_score': self.analysis_result.flesch_kincaid_score,
             'is_complete': self.analysis_result.is_complete_document
         }
