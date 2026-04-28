@@ -1009,8 +1009,20 @@ def get_submission_status(job_id):
         # Include analysis results if available
         if submission.analysis_result:
             response_data['analysis_available'] = True
+            
+            # Safely handle potential stringified JSON in content_statistics
+            stats = submission.analysis_result.content_statistics
+            if isinstance(stats, str):
+                import json
+                try:
+                    stats = json.loads(stats)
+                except:
+                    stats = {}
+            elif not stats:
+                stats = {}
+                
             response_data['analysis_summary'] = {
-                'word_count': submission.analysis_result.content_statistics.get('word_count') if submission.analysis_result.content_statistics else None,
+                'word_count': stats.get('word_count') if isinstance(stats, dict) else None,
                 'readability_score': submission.analysis_result.flesch_kincaid_score,
                 'timeliness': submission.analysis_result.timeliness_classification.value if submission.analysis_result.timeliness_classification else None
             }
