@@ -27,6 +27,7 @@ class RubricService:
                 description=rubric_data.get('description', ''),
                 criteria=rubric_data.get('criteria', []),
                 system_instructions=rubric_data.get('system_instructions', ''),
+                ai_prompt_message=rubric_data.get('ai_prompt_message', ''),
                 evaluation_goal=rubric_data.get('evaluation_goal', ''),
                 is_active=rubric_data.get('is_active', True),
                 professor_id=user_id
@@ -61,6 +62,7 @@ class RubricService:
             rubric.description = rubric_data.get('description', rubric.description)
             rubric.criteria = rubric_data.get('criteria', rubric.criteria)
             rubric.system_instructions = rubric_data.get('system_instructions', rubric.system_instructions)
+            rubric.ai_prompt_message = rubric_data.get('ai_prompt_message', rubric.ai_prompt_message)
             rubric.evaluation_goal = rubric_data.get('evaluation_goal', rubric.evaluation_goal)
             rubric.is_active = rubric_data.get('is_active', rubric.is_active)
             

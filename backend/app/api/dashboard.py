@@ -204,6 +204,11 @@ def _refresh_drive_submission_analysis(submission, force_refresh=False):
     if drive_meta.get('name'):
         submission.original_filename = drive_meta.get('name')
         submission.file_name = drive_meta.get('name')
+    
+    # Update file_modified_at from Drive if available
+    if drive_meta.get('modifiedTime'):
+        submission.file_modified_at = _parse_iso_datetime(drive_meta.get('modifiedTime'))
+        
     submission.status = SubmissionStatus.WARNING if warnings else SubmissionStatus.COMPLETED
     submission.processing_completed_at = datetime.utcnow()
     submission.error_message = None
@@ -498,6 +503,14 @@ def get_submission_detail(submission_id):
                             db.session.add(submission.analysis_result)
                         
                         submission.analysis_result.document_metadata = new_metadata
+                        
+                        # Sync submission's file_modified_at for better list-view consistency
+                        if new_metadata.get('last_modified_date'):
+                            from app.api.submission import _parse_iso_datetime
+                            new_mod_at = _parse_iso_datetime(new_metadata['last_modified_date'])
+                            if new_mod_at:
+                                submission.file_modified_at = new_mod_at
+                                
                         db.session.commit()
                         current_app.logger.info("Metadata auto-repaired successfully")
         except Exception as e:

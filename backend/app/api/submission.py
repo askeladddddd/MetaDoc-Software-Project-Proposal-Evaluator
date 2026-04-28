@@ -46,6 +46,22 @@ submission_bp = Blueprint('submission', __name__)
 submission_service = SubmissionService()
 drive_service = DriveService()
 
+def _parse_iso_datetime(value):
+    """Parse ISO timestamp strings from Google APIs safely."""
+    if not value:
+        return None
+    try:
+        # Handles both 'Z' and '+00:00' UTC formats
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        # If timezone-aware, convert to UTC and make naive
+        if dt.tzinfo is not None:
+            from datetime import timezone
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        # If naive, assume it's already UTC
+        return dt
+    except Exception:
+        return None
+
 def perform_full_analysis(app, submission_id):
     """Perform metadata extraction and AI analysis in the background."""
     with app.app_context():
@@ -89,6 +105,13 @@ def perform_full_analysis(app, submission_id):
             analysis.document_text = text
             analysis.is_complete_document = is_complete
             analysis.validation_warnings = warnings
+
+            # Sync submission's file_modified_at with extracted metadata for better list-view fallback
+            if metadata.get('last_modified_date'):
+                new_mod_at = _parse_iso_datetime(metadata['last_modified_date'])
+                if new_mod_at:
+                    submission.file_modified_at = new_mod_at
+
             db.session.commit()
             
             # 3. AI Analysis
@@ -568,6 +591,15 @@ def upload_file():
             
             # Try to extract metadata to validate document
             test_metadata, test_error = metadata_service.extract_docx_metadata(temp_path)
+            
+            # Use internal document last-modified date if available, fallback to OS timestamp
+            file_modified_at = None
+            if not test_error and test_metadata.get('last_modified_date'):
+                file_modified_at = _parse_iso_datetime(test_metadata['last_modified_date'])
+            
+            if not file_modified_at:
+                file_modified_at = datetime.fromtimestamp(os.path.getmtime(temp_path))
+
             if test_error:
                 os.remove(temp_path)
                 return jsonify({'error': f'Invalid document: {test_error}'}), 415
@@ -646,15 +678,16 @@ def upload_file():
             file_name=unique_filename,
             original_filename=original_filename,
             file_path=storage_path,
-            file_size=file_size,
             file_hash=file_hash,
-            mime_type=mime_type,
-            submission_type='upload',
-            student_id=student_id if student_id else None,
-            student_name=student_name if student_name else None,
-            semester=semester,
-            deadline_id=deadline_id if deadline_id else None,
+            file_size=file_size,
+            file_type=mime_type,
+            file_modified_at=file_modified_at,
+            submitted_at=datetime.utcnow(),
+            student_id=student_id,
+            student_name=student_name,
             professor_id=professor_id,
+            deadline_id=deadline_id,
+            semester=semester,
             status=SubmissionStatus.PENDING
         )
         
@@ -866,6 +899,9 @@ def submit_drive_link():
         
         os.rename(file_path, storage_path)
         
+        # Get file modification time from Drive metadata
+        file_modified_at = _parse_iso_datetime(metadata.get('modifiedTime'))
+
         # Create submission record
         submission, error = submission_service.create_submission_record(
             file_name=filename,
@@ -874,6 +910,8 @@ def submit_drive_link():
             file_size=file_size,
             file_hash=file_hash,
             mime_type=metadata['mimeType'],
+            file_modified_at=file_modified_at,
+            submitted_at=datetime.utcnow(),
             submission_type='drive_link',
             google_drive_link=drive_link,
             student_id=student_id if student_id else None,

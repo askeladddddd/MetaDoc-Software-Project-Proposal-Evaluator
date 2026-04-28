@@ -8,6 +8,7 @@ from sqlalchemy import Text
 from app.core.extensions import db
 from app.models.base import BaseModel, SubmissionStatus
 
+
 class Submission(BaseModel):
     """Submission model - Core entity for document submissions"""
     __tablename__ = 'submissions'
@@ -20,6 +21,7 @@ class Submission(BaseModel):
     file_size = db.Column(db.BigInteger, nullable=False)
     file_hash = db.Column(db.String(64), nullable=False)
     mime_type = db.Column(db.String(100), nullable=False)
+    file_modified_at = db.Column(db.DateTime, nullable=True)
     
     # Submission details
     submission_type = db.Column(db.String(50), nullable=False)
@@ -27,6 +29,7 @@ class Submission(BaseModel):
     student_id = db.Column(db.String(50), nullable=True)
     student_name = db.Column(db.String(255), nullable=True)
     semester = db.Column(db.String(10), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     
     # Processing status
     status = db.Column(db.Enum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False)

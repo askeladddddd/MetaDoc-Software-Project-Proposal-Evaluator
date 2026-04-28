@@ -17,6 +17,7 @@ const RubricEditorModal = ({ isOpen, onClose, rubricToEdit, onSave }) => {
         description: '',
         evaluation_goal: '',
         reviewer_persona: 'Academic Reviewer',
+        ai_prompt_message: '',
         is_active: false,
         created_at: new Date().toISOString(),
         criteria: []
@@ -249,6 +250,41 @@ const RubricEditorModal = ({ isOpen, onClose, rubricToEdit, onSave }) => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="form-group-v4">
+            <label>AI PROMPT MESSAGE <span className="optional-text">(Optional)</span></label>
+            <textarea
+              value={activeRubric.ai_prompt_message || ''}
+              onChange={(e) => setActiveRubric({ ...activeRubric, ai_prompt_message: e.target.value })}
+              placeholder="Add custom instructions for the AI evaluator. These will be prioritized when scoring. Example: 'Pay special attention to the user interface design. Prioritize feasibility over innovation.'"
+              rows={4}
+              style={{
+                fontFamily: 'Consolas, Monaco, monospace',
+                fontSize: '0.85rem',
+                padding: '8px 12px',
+                border: '1px solid #cbd5e1'
+              }}
+            />
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ minWidth: '16px' }}
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>Use this to give the AI specific evaluation guidance. Your instructions will be highlighted as IMPORTANT and prioritized.</span>
             </div>
           </div>
         </div>

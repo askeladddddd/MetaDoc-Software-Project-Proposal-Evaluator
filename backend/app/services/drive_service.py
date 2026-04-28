@@ -65,6 +65,21 @@ class DriveService:
             current_app.logger.error(f"Failed to initialize Google Drive service: {e}")
             raise Exception("Google Drive service unavailable")
     
+    def _parse_iso_datetime(self, value):
+        """Parse ISO timestamp strings from Google APIs safely."""
+        if not value:
+            return None
+        try:
+            # Handles both 'Z' and '+00:00' UTC formats
+            dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            # If timezone-aware, convert to UTC and make naive
+            if dt.tzinfo is not None:
+                return dt.astimezone(timezone.utc).replace(tzinfo=None)
+            # If naive, assume it's already UTC
+            return dt
+        except Exception:
+            return None
+
     def get_file_metadata(self, file_id, user_credentials_json=None):
         """Get file metadata from Google Drive"""
         try:
@@ -125,6 +140,12 @@ class DriveService:
                 fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser,permissions,headRevisionId,version'
             ).execute()
             
+            # Extract timestamps for convenience if they exist
+            if 'createdTime' in metadata:
+                metadata['created_at_dt'] = self._parse_iso_datetime(metadata['createdTime'])
+            if 'modifiedTime' in metadata:
+                metadata['modified_at_dt'] = self._parse_iso_datetime(metadata['modifiedTime'])
+
             return metadata, None
             
         except HttpError as e:

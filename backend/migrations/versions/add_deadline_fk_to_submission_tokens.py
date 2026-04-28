@@ -17,14 +17,24 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('submission_tokens', schema=None) as batch_op:
-        batch_op.create_foreign_key(
-            'submission_tokens_deadline_id_fkey',
-            'deadlines',
-            ['deadline_id'],
-            ['id'],
-            ondelete='SET NULL'
-        )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    constraints = inspector.get_foreign_keys('submission_tokens')
+    
+    # Check if the foreign key already exists
+    fkey_exists = any(
+        fk['name'] == 'submission_tokens_deadline_id_fkey' for fk in constraints
+    )
+
+    if not fkey_exists:
+        with op.batch_alter_table('submission_tokens', schema=None) as batch_op:
+            batch_op.create_foreign_key(
+                'submission_tokens_deadline_id_fkey',
+                'deadlines',
+                ['deadline_id'],
+                ['id'],
+                ondelete='SET NULL'
+            )
 
 
 def downgrade():

@@ -441,7 +441,7 @@ const Reports = () => {
 
                             {!loading && visibleRows.map((submission) => {
                                 const submitted = formatDateTime(submission.created_at);
-                                const modified = formatDateTime(submission.metadata_last_modified || submission.last_modified || submission.updated_at || submission.created_at);
+                                const modified = formatDateTime(submission.last_activity);
                                 const status = resolveSubmissionStatusMeta(submission, deadlineDatetimeMap);
                                 const deliverableTitle = getDeliverableTitle(submission, deadlineTitleMap);
                                 const displayDeliverableTitle = formatDeliverableInitials(deliverableTitle, 10);

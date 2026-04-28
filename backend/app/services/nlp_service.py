@@ -658,6 +658,14 @@ class NLPService:
             
             user_prompt = f"### RUBRIC CRITERIA TO EVALUATE:\n{criteria_text}\n\n"
             
+            # Add custom AI prompt message with high priority if provided
+            if rubric.get('ai_prompt_message'):
+                user_prompt += (
+                    "### IMPORTANT: CUSTOM EVALUATION INSTRUCTIONS (PRIORITIZED):\n"
+                    f"{rubric.get('ai_prompt_message')}\n\n"
+                    "Please follow these instructions carefully and prioritize them when evaluating the submission.\n\n"
+                )
+            
             if submission_context:
                 user_prompt += f"### ASSIGNMENT CONTEXT:\n"
                 user_prompt += f"- **Title**: {submission_context.get('title')}\n"

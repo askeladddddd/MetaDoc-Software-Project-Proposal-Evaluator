@@ -65,8 +65,8 @@ def _resolve_last_modified_iso(submission) -> Optional[str]:
     if latest_contributor_date:
         return _normalize_iso_datetime(latest_contributor_date)
 
-    fallback_modified = submission.updated_at if submission.updated_at else submission.created_at
-    return _normalize_iso_datetime(fallback_modified)
+    # Removed fallback to created_at/updated_at to leave blank if metadata is unavailable
+    return None
 
 
 def _get_document_metadata_last_modified_iso(submission) -> Optional[str]:
@@ -139,7 +139,7 @@ class SubmissionListDTO:
         
         created_at_iso = _normalize_iso_datetime(submission.created_at)
         metadata_last_modified_iso = _get_document_metadata_last_modified_iso(submission)
-        last_modified_iso = metadata_last_modified_iso or _resolve_last_modified_iso(submission)
+        last_modified_iso = metadata_last_modified_iso or _get_document_metadata_last_modified_iso(submission)
         
         # Get word count from analysis result if available
         word_count = None
@@ -147,6 +147,9 @@ class SubmissionListDTO:
             if submission.analysis_result.content_statistics:
                 word_count = submission.analysis_result.content_statistics.get('word_count')
         
+        submitted_at_value = getattr(submission, 'submitted_at', None) or submission.created_at
+        submitted_at_iso = submitted_at_value.isoformat() if submitted_at_value else None
+
         data = {
             'id': submission.id,
             'job_id': submission.job_id,
@@ -157,11 +160,15 @@ class SubmissionListDTO:
             'student_id': submission.student_id,
             'student_name': submission.student_name,
             'semester': submission.semester,
-            'status': submission.status.value if hasattr(submission.status, 'value') else submission.status,
-            'is_late': submission.is_late if hasattr(submission, 'is_late') else False,
+            'status': submission.status.value if hasattr(submission, 'status') and submission.status else 'Unknown',
+            'timeliness': submission.timeliness.value if hasattr(submission, 'timeliness') and submission.timeliness else 'UNKNOWN',
             'created_at': created_at_iso,
-            'last_modified': last_modified_iso,
+            'submitted_at': _normalize_iso_datetime(submitted_at_value),
+            'updated_at': _normalize_iso_datetime(submission.updated_at) if hasattr(submission, 'updated_at') else None,
+            'file_modified_at': _normalize_iso_datetime(submission.file_modified_at) if hasattr(submission, 'file_modified_at') and submission.file_modified_at else None,
             'metadata_last_modified': metadata_last_modified_iso,
+            'last_modified': metadata_last_modified_iso,
+            'last_activity': metadata_last_modified_iso,
             'file_size': submission.file_size,
             'submission_type': submission.submission_type
         }
@@ -198,6 +205,9 @@ class SubmissionDetailDTO:
         if completed_at_iso and not completed_at_iso.endswith('Z') and '+' not in completed_at_iso:
             completed_at_iso += 'Z'
         
+        submitted_at_value = getattr(submission, 'submitted_at', None) or submission.created_at
+        submitted_at_iso = submitted_at_value.isoformat() if submitted_at_value else None
+
         data = {
             'id': submission.id,
             'job_id': submission.job_id,
@@ -215,9 +225,10 @@ class SubmissionDetailDTO:
             'status': submission.status.value if hasattr(submission.status, 'value') else submission.status,
             'is_late': submission.is_late if hasattr(submission, 'is_late') else False,
             'created_at': created_at_iso,
+            'submitted_at': _normalize_iso_datetime(submitted_at_value),
             'last_modified': last_modified_iso,
-            'processing_started_at': started_at_iso,
-            'processing_completed_at': completed_at_iso,
+            'processing_started_at': _normalize_iso_datetime(submission.processing_started_at),
+            'processing_completed_at': _normalize_iso_datetime(submission.processing_completed_at),
             'error_message': submission.error_message,
             'professor_id': submission.professor_id,
             'deadline_id': submission.deadline_id

@@ -15,6 +15,7 @@ class Rubric(BaseModel):
     description = db.Column(Text, nullable=True)
     criteria = db.Column(db.JSON, nullable=False) # Stores the list of criteria and levels
     system_instructions = db.Column(Text, nullable=True) # Custom Gemini prompt
+    ai_prompt_message = db.Column(Text, nullable=True) # Manual AI prompt message with prioritization instructions
     evaluation_goal = db.Column(Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     
@@ -31,6 +32,7 @@ class Rubric(BaseModel):
             'description': self.description,
             'criteria': self.criteria,
             'system_instructions': self.system_instructions,
+            'ai_prompt_message': self.ai_prompt_message,
             'evaluation_goal': self.evaluation_goal,
             'is_active': self.is_active,
             'professor_id': self.professor_id,

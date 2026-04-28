@@ -160,6 +160,11 @@ class SubmissionService:
     
     def create_submission_record(self, **kwargs):
         """Create submission record in database"""
+        
+        # Ensure file_modified_at is a datetime object if provided
+        if 'file_modified_at' in kwargs and isinstance(kwargs['file_modified_at'], str):
+            kwargs['file_modified_at'] = datetime.fromisoformat(kwargs['file_modified_at'])
+
         submission = Submission(
             job_id=str(uuid.uuid4()),
             **kwargs
