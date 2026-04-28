@@ -495,7 +495,7 @@ class MetadataService:
         if isinstance(metadata['contributors'], list):
             metadata['contributors'] = metadata['contributors'][:10]
         
-        return metadata, None
+        return metadata, parsing_error
 
     
     def extract_document_text(self, file_path):

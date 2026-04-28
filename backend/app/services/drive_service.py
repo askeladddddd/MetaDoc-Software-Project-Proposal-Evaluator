@@ -227,7 +227,17 @@ class DriveService:
                 if response.status_code != 200:
                     current_app.logger.info(f"Export failed (status {response.status_code}), trying direct download for {file_id}")
                     # Second attempt: Direct download (likely a binary docx)
-                    response = requests.get(url_direct, allow_redirects=True, timeout=10)
+                    session = requests.Session()
+                    response = session.get(url_direct, allow_redirects=True, timeout=10)
+                    
+                    # Check for virus scan confirmation page
+                    if response.status_code == 200 and 'confirm=' in response.text:
+                         import re
+                         match = re.search(r'confirm=([0-9A-Za-z_]+)', response.text)
+                         if match:
+                             confirm_token = match.group(1)
+                             url_confirm = f"{url_direct}&confirm={confirm_token}"
+                             response = session.get(url_confirm, allow_redirects=True, timeout=10)
                 
                 if response.status_code == 200:
                     # Save to temporary storage
