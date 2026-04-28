@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { dashboardAPI, rubricAPI } from '../services/api';
 import {
@@ -63,6 +63,120 @@ const SubmissionDetailView = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const hasAttemptedAutoAnalysis = useRef(false);
+  const lastEvaluationTime = useRef(0);
+  const DEBOUNCE_DELAY = 500; // milliseconds
+
+  // Define handleRunAIEvaluation with useCallback BEFORE any returns
+  const handleRunAIEvaluation = useCallback(async () => {
+    // Throttle check: prevent calls within DEBOUNCE_DELAY milliseconds
+    const now = Date.now();
+    if (now - lastEvaluationTime.current < DEBOUNCE_DELAY) {
+      console.log('AI evaluation called too soon, throttling...');
+      return;
+    }
+    lastEvaluationTime.current = now;
+
+    setIsAnalyzing(true);
+    setProgress(0);
+    setProgressText('Preparing AI analysis...');
+
+    // Clear existing analysis so the user only sees the loading state
+    setSubmission(prev => ({
+      ...prev,
+      analysis_result: null
+    }));
+
+    try {
+      // 1. Try to get the rubric assigned to the deadline from DB first
+      let activeRubric = null;
+      try {
+        const rubricResponse = await rubricAPI.getRubrics();
+        const rubrics = rubricResponse.data;
+
+        // Match by deadline's rubric_id or find the active one
+        const targetId = submission?.deadline?.rubric_id;
+        activeRubric = rubrics.find(r => String(r.id) === String(targetId)) ||
+          rubrics.find(r => r.is_active) ||
+          rubrics[0];
+      } catch (e) {
+        console.warn("Failed to fetch rubrics from DB, falling back to localStorage", e);
+        const savedRubrics = JSON.parse(localStorage.getItem('metadoc_rubrics') || '[]');
+        const targetId = submission?.deadline?.rubric_id;
+        activeRubric = savedRubrics.find(r => String(r.id) === String(targetId)) ||
+          savedRubrics.find(r => r.is_active) ||
+          savedRubrics[0];
+      }
+
+      if (!activeRubric || !activeRubric.criteria || activeRubric.criteria.length === 0) {
+        alert("Please create and save a rubric in the Rubric Management page first.");
+        setIsAnalyzing(false);
+        return;
+      }
+
+      const duration = 3000;
+      const intervalMs = 50;
+      const steps = duration / intervalMs;
+      let currentStep = 0;
+
+      const progressInterval = setInterval(() => {
+        currentStep++;
+        const targetProgress = Math.min(95, (currentStep / steps) * 95);
+        setProgress(targetProgress);
+
+        if (targetProgress < 30) setProgressText('Reading document context...');
+        else if (targetProgress < 60) setProgressText('Evaluating against rubric...');
+        else if (targetProgress < 90) setProgressText('Synthesizing feedback...');
+        else setProgressText('Finalizing AI report...');
+      }, intervalMs);
+
+      // 2. Call the real AI evaluation API
+      const response = await dashboardAPI.runAIEvaluation(id, activeRubric);
+
+      clearInterval(progressInterval);
+      setProgress(100);
+      setProgressText('Complete');
+
+      // Wait for 1 second at 100% before completing analysis
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update local state with fresh analysis
+      setSubmission(prev => ({
+        ...prev,
+        analysis_result: {
+          ...prev.analysis_result,
+          ...response.data
+        }
+      }));
+
+      setShowSuccessModal(true);
+      setAnalysisError(null);
+      setTimeout(() => setShowSuccessModal(false), 4000);
+
+      // If we are in a "Pending" state, refresh the whole submission to get the 'Completed' status
+      if (submission?.status !== 'completed') {
+        const detailResponse = await dashboardAPI.getSubmissionDetail(id);
+        setSubmission(detailResponse.data);
+      }
+
+    } catch (err) {
+      console.error('AI Evaluation error:', err);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to perform AI evaluation.';
+
+      if (errorMsg.includes('rate limits')) {
+        setAnalysisError(`Error: ${errorMsg}. Please wait a moment before retrying.`);
+      } else if (errorMsg.includes('429')) {
+        alert("Gemini AI Quota Exceeded. Please wait a minute before trying again.");
+      } else if (errorMsg.includes('404')) {
+        setAnalysisError(`Error (404): ${errorMsg}`);
+      } else {
+        setAnalysisError(`Error: ${errorMsg}`);
+      }
+    } finally {
+      setIsAnalyzing(false);
+      setProgress(0);
+      setProgressText('');
+    }
+  }, [id]);
 
   useEffect(() => {
     if (analysisError) {
@@ -238,105 +352,6 @@ const SubmissionDetailView = () => {
   };
 
   const analysis = submission?.analysis_result;
-
-  const handleRunAIEvaluation = async () => {
-    setIsAnalyzing(true);
-    setProgress(0);
-    setProgressText('Preparing AI analysis...');
-
-    // Clear existing analysis so the user only sees the loading state
-    setSubmission(prev => ({
-      ...prev,
-      analysis_result: null
-    }));
-
-    try {
-      // 1. Try to get the rubric assigned to the deadline from DB first
-      let activeRubric = null;
-      try {
-        const rubricResponse = await rubricAPI.getRubrics();
-        const rubrics = rubricResponse.data;
-
-        // Match by deadline's rubric_id or find the active one
-        const targetId = submission.deadline?.rubric_id;
-        activeRubric = rubrics.find(r => String(r.id) === String(targetId)) ||
-          rubrics.find(r => r.is_active) ||
-          rubrics[0];
-      } catch (e) {
-        console.warn("Failed to fetch rubrics from DB, falling back to localStorage", e);
-        const savedRubrics = JSON.parse(localStorage.getItem('metadoc_rubrics') || '[]');
-        const targetId = submission.deadline?.rubric_id;
-        activeRubric = savedRubrics.find(r => String(r.id) === String(targetId)) ||
-          savedRubrics.find(r => r.is_active) ||
-          savedRubrics[0];
-      }
-
-      if (!activeRubric || !activeRubric.criteria || activeRubric.criteria.length === 0) {
-        alert("Please create and save a rubric in the Rubric Management page first.");
-        setIsAnalyzing(false);
-        return;
-      }
-
-      const duration = 3000;
-      const intervalMs = 50;
-      const steps = duration / intervalMs;
-      let currentStep = 0;
-
-      const progressInterval = setInterval(() => {
-        currentStep++;
-        const targetProgress = Math.min(95, (currentStep / steps) * 95);
-        setProgress(targetProgress);
-
-        if (targetProgress < 30) setProgressText('Reading document context...');
-        else if (targetProgress < 60) setProgressText('Evaluating against rubric...');
-        else if (targetProgress < 90) setProgressText('Synthesizing feedback...');
-        else setProgressText('Finalizing AI report...');
-      }, intervalMs);
-
-      // 2. Call the real AI evaluation API
-      const response = await dashboardAPI.runAIEvaluation(id, activeRubric);
-
-      clearInterval(progressInterval);
-      setProgress(100);
-      setProgressText('Complete');
-
-      // Wait for 1 second at 100% before completing analysis
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update local state with fresh analysis
-      setSubmission(prev => ({
-        ...prev,
-        analysis_result: {
-          ...prev.analysis_result,
-          ...response.data
-        }
-      }));
-
-      setShowSuccessModal(true);
-      setAnalysisError(null);
-      setTimeout(() => setShowSuccessModal(false), 4000);
-
-      // If we are in a "Pending" state, refresh the whole submission to get the 'Completed' status
-      if (submission.status !== 'completed') {
-        const detailResponse = await dashboardAPI.getSubmissionDetail(id);
-        setSubmission(detailResponse.data);
-      }
-
-    } catch (err) {
-      console.error('AI Evaluation error:', err);
-      const errorMsg = err.response?.data?.error || err.message || 'Failed to perform AI evaluation.';
-
-      if (errorMsg.includes('429')) {
-        alert("Gemini AI Quota Exceeded. Please wait a minute before trying again.");
-      } else if (errorMsg.includes('404')) {
-        setAnalysisError(`Error (404): ${errorMsg}`);
-      } else {
-        setAnalysisError(`Error: ${errorMsg}`);
-      }
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
   return (
     <div className="detail-page">

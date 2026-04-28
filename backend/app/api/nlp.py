@@ -76,7 +76,7 @@ def analyze_nlp(submission_id):
                 'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
             }
             
-            ai_summary, ai_error = get_nlp_service().generate_ai_summary(text, context)
+            ai_summary, model_used, ai_error = get_nlp_service().generate_ai_summary(text, context)
             if ai_error:
                 current_app.logger.warning(f"AI summary failed: {ai_error}")
         

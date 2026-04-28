@@ -922,9 +922,6 @@ class DashboardService:
             # Update the analysis result with AI evaluation
             analysis = submission.analysis_result
             analysis.ai_summary = evaluation.get('ai_summary')
-            # Store full evaluation including contributor scores
-            analysis.ai_evaluation = evaluation
-            analysis.overall_score = evaluation.get('score', 0)
             
             # MERGE into nlp_results instead of overwriting to prevent data loss 
             # if local NLP analysis runs later.
@@ -934,7 +931,7 @@ class DashboardService:
             else:
                 analysis.nlp_results = evaluation
             
-            # Also store in ai_insights as a backup for the DTO
+            # Also store in ai_insights as the primary store for the DTO
             analysis.ai_insights = evaluation
             
             # Populate validation_warnings for the UI

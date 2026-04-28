@@ -66,7 +66,7 @@ class Config:
     
     # Gemini AI Configuration
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash'
+    GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-1.5-flash'
     # Fallback models list: tried in order when rate limit is hit or model is unavailable
     GEMINI_FALLBACK_MODELS = _split_csv(
         os.environ.get('GEMINI_FALLBACK_MODELS'),

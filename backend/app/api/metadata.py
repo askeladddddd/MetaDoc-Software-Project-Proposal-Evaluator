@@ -165,7 +165,7 @@ def analyze_submission(submission_id):
                 'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
             }
             
-            ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
+            ai_summary, model_used, ai_error = nlp_service.generate_ai_summary(text, context)
             
             # Consolidate
             consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)

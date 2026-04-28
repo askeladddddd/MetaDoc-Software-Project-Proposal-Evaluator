@@ -199,14 +199,35 @@ class NLPService:
                     model = genai.GenerativeModel(model_name)
                     response = model.generate_content(full_prompt)
                     
-                    if response and response.text:
-                        if current_app:
-                            current_app.logger.info(f"✓ Gemini successful with model: {model_name}")
-                        return response.text, model_name, None
-                    else:
-                        if current_app:
-                            current_app.logger.warning(f"Empty response from Gemini with model: {model_name}")
+                    if response:
+                        try:
+                            # Accessing .text can raise an exception if the response was blocked
+                            if response.text:
+                                if current_app:
+                                    current_app.logger.info(f"✓ Gemini successful with model: {model_name}")
+                                return response.text, model_name, None
+                        except (ValueError, AttributeError) as ve:
+                            # Handle blocked responses or missing text
+                            finish_reason = "Unknown"
+                            try:
+                                if response.candidates:
+                                    finish_reason = str(response.candidates[0].finish_reason)
+                            except:
+                                pass
+                            
+                            if current_app:
+                                current_app.logger.warning(f"Gemini response blocked or text unavailable for {model_name}: {ve} (Reason: {finish_reason})")
+                            
+                            # If it's the last model, we'll return an error. Otherwise continue to next model.
+                            if model_idx == len(models_to_try) - 1:
+                                return None, model_name, f"Gemini response blocked (Reason: {finish_reason})"
+                            break # Try next model
+                        
+                    if current_app:
+                        current_app.logger.warning(f"Empty response from Gemini with model: {model_name}")
+                    if model_idx == len(models_to_try) - 1:
                         return None, model_name, "No response from Gemini"
+                    break # Try next model
                 
                 except Exception as e:
                     error_str = str(e)
@@ -517,9 +538,9 @@ class NLPService:
             if response_text:
                 if current_app:
                     current_app.logger.info(f"Summary generated with model: {model_used}")
-                return {'summary': response_text}, None
+                return {'summary': response_text}, model_used, None
             else:
-                return None, error
+                return None, model_used, error
                 
         except Exception as e:
             if current_app:
@@ -750,20 +771,20 @@ class NLPService:
                     return evaluation, model_used, None
                 except json.JSONDecodeError:
                     current_app.logger.error(f"Failed to parse Gemini JSON response: {raw_text}")
-                    return None, "Gemini returned invalid JSON format"
+                    return None, model_used, "Gemini returned invalid JSON format"
             else:
-                return None, error
+                return None, model_used, error
                 
         except Exception as e:
             error_str = str(e)
             if "429" in error_str or "quota" in error_str.lower() or "resource exhausted" in error_str.lower():
-                return None, "Gemini API Quota Exceeded. Please try again in 60 seconds."
+                return None, None, "Gemini API Quota Exceeded. Please try again in 60 seconds."
             if "404" in error_str:
-                return None, "Gemini Model not found. The service may be temporarily unavailable."
+                return None, None, "Gemini Model not found. The service may be temporarily unavailable."
                 
             if current_app:
                 current_app.logger.error(f"Gemini rubric evaluation failed: {e}")
-            return None, f"AI evaluation failed: {error_str}"
+            return None, None, f"AI evaluation failed: {error_str}"
 
     def consolidate_nlp_results(self, local_results, ai_summary=None):
         """
