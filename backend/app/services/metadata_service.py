@@ -144,6 +144,8 @@ class MetadataService:
             'revision_count': 0,
             'editing_time_minutes': 0,
             'application': 'Unknown',
+            'image_count': 0,
+            'image_density_warning': False,
             'contributors': []
         }
 
@@ -292,6 +294,18 @@ class MetadataService:
                                     add_contributor(text, 'Contributor')
                         except Exception as e:
                             current_app.logger.warning(f"Error parsing core.xml: {e}")
+
+                    # ── Image Count Check (Anti-Screenshot Loophole) ────────────────
+                    # Count files in word/media/ to see if students are hiding text in images
+                    media_files = [f for f in zip_file.namelist() if f.startswith('word/media/')]
+                    metadata['image_count'] = len(media_files)
+                    
+                    # Logic: If more than 1 image per 100 words, it's suspicious for a text-based proposal
+                    word_count_for_density = metadata.get('word_count', 0)
+                    if metadata['image_count'] > 5 and word_count_for_density > 0:
+                        density_ratio = metadata['image_count'] / (word_count_for_density / 100)
+                        if density_ratio > 1.5: # More than 1.5 images per 100 words
+                            metadata['image_density_warning'] = True
 
                     # ── Revision-based author/last-editor extraction ──────────────────
                     # Parse tracked changes from word/document.xml and word/comments.xml.

@@ -878,8 +878,10 @@ class DashboardService:
                 
                 context['contributors'] = contributors
                 context['submitter_email'] = submitter_email
+                context['image_density_warning'] = submission.analysis_result.document_metadata.get('image_density_warning', False)
+                context['image_count'] = submission.analysis_result.document_metadata.get('image_count', 0)
             
-            evaluation, error = nlp_service.evaluate_with_rubric(
+            evaluation, model_used, error = nlp_service.evaluate_with_rubric(
                 submission.analysis_result.document_text,
                 rubric_data,
                 submission_context=context
@@ -934,6 +936,18 @@ class DashboardService:
             
             # Also store in ai_insights as a backup for the DTO
             analysis.ai_insights = evaluation
+            
+            # Populate validation_warnings for the UI
+            warnings = []
+            if evaluation.get('integrity_warning'):
+                warnings.append(evaluation['integrity_warning'])
+            if evaluation.get('image_density_warning'):
+                warnings.append(f"High Image Density: This document contains {evaluation.get('image_count', 0)} images relative to text. Possible screenshots detected.")
+            
+            # Preserve existing warnings if any
+            existing_warnings = analysis.validation_warnings or []
+            # Merge and avoid duplicates
+            analysis.validation_warnings = list(set(existing_warnings + warnings))
             
             db.session.commit()
             return evaluation, None
