@@ -25,8 +25,8 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    # Enable CORS for frontend domain
-    CORS(app, origins=["https://metadoc-eight.vercel.app"])
+    # Enable CORS for frontend domain using config
+    CORS(app, origins=app.config.get('CORS_ORIGINS', ["https://metadoc-eight.vercel.app"]), supports_credentials=True)
     
     # CRITICAL: Trust reverse proxies (like Render) so Secure cookies work properly
     from werkzeug.middleware.proxy_fix import ProxyFix
