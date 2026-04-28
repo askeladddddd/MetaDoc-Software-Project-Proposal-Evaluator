@@ -240,6 +240,14 @@ class DriveService:
                              response = session.get(url_confirm, allow_redirects=True, timeout=10)
                 
                 if response.status_code == 200:
+                    # Validate that the content is actually a ZIP/DOCX file
+                    # All DOCX files (ZIPs) start with 'PK\x03\x04'
+                    is_zip = response.content.startswith(b'PK\x03\x04')
+                    is_html = b'<html' in response.content.lower() or b'<!doctype html' in response.content.lower()
+                    
+                    if not is_zip and is_html:
+                        return None, "Access Denied: The file is private or requires login. Please set sharing to 'Anyone with the link'."
+
                     # Save to temporary storage
                     if not filename.endswith('.docx') and mime_type == 'application/vnd.google-apps.document':
                          filename += '.docx'
