@@ -31,7 +31,12 @@ class AuditService:
             user_agent = None
             
             if request:
-                ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+                raw_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+                if raw_ip:
+                    # X-Forwarded-For can be a comma-separated list. Take the first IP.
+                    ip_address = raw_ip.split(',')[0].strip()
+                    # Strictly truncate to 45 chars to prevent DB errors
+                    ip_address = ip_address[:45]
                 user_agent = request.headers.get('User-Agent')
             
             # Create audit log entry
