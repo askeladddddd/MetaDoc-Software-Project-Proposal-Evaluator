@@ -184,6 +184,20 @@ def _refresh_drive_submission_analysis(submission, force_refresh=False):
         analysis = AnalysisResult(submission_id=submission.id)
         db.session.add(analysis)
         submission.analysis_result = analysis
+    else:
+        # Loophole Fix: Archive the old report before overwriting it!
+        # If there's an existing AI evaluation, save it so students can't completely erase their history
+        if analysis.ai_summary or analysis.ai_insights:
+            archive_dir = os.path.join(current_app.config.get('REPORTS_STORAGE_PATH', './reports'), 'archive')
+            os.makedirs(archive_dir, exist_ok=True)
+            archive_filename = f"report_archive_{submission.id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            archive_path = os.path.join(archive_dir, archive_filename)
+            try:
+                with open(archive_path, 'w') as f:
+                    json.dump(analysis.to_dict(), f, indent=2)
+                current_app.logger.info(f"Loophole Fix: Archived previous report to {archive_path} before revision update")
+            except Exception as archive_err:
+                current_app.logger.error(f"Failed to archive report: {archive_err}")
 
     analysis.document_metadata = metadata
     analysis.content_statistics = content_stats
