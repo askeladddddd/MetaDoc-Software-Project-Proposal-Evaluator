@@ -23,6 +23,7 @@ import {
 import Card from '../components/common/Card/Card';
 import Badge from '../components/common/Badge/Badge';
 import logo4 from '../assets/images/Logo4.jpg';
+import ChatbotWindow from '../components/chatbot/ChatbotWindow';
 import '../styles/SubmissionDetail.css';
 
 const formatStudentId = (input) => {
@@ -70,6 +71,8 @@ const getFinalScore = (analysis) => {
 
 const extractReferences = (text) => {
   if (!text) return null;
+  
+  // Improved regex to find the references section header
   const headerRegex = /\n\s*(references|bibliography|works cited)\s*\n/gi;
   let match;
   let lastIndex = -1;
@@ -80,10 +83,20 @@ const extractReferences = (text) => {
     lastMatchLength = match[0].length;
   }
 
-  if (lastIndex == -1) return null;
+  if (lastIndex === -1) return null;
 
-  const referencesText = text.slice(lastIndex + lastMatchLength).trim();
-  return referencesText ? referencesText : null;
+  let content = text.slice(lastIndex + lastMatchLength).trim();
+  
+  // Look for the next major section boundary to avoid grabbing the rest of the document
+  // Stops at patterns like "1. ", "2. ", "Module 1", "Section 1", or common major headings
+  const nextSectionBoundary = /\n\s*([1-9]\.|module\s*[1-9]|section\s*[1-9]|overall\s*description|specific\s*requirements|functional\s*requirements|introduction|conclusion|abstract)/i;
+  const stopMatch = nextSectionBoundary.exec(content);
+  
+  if (stopMatch) {
+    content = content.slice(0, stopMatch.index).trim();
+  }
+
+  return content ? content : null;
 };
 
 
@@ -97,11 +110,12 @@ const SubmissionDetailView = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('Initializing...');
+  const [referenceVisibility, setReferenceVisibility] = useState({});
+  const [showFullReferences, setShowFullReferences] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const hasAttemptedAutoAnalysis = useRef(false);
   const lastEvaluationTime = useRef(0);
-  const [referenceVisibility, setReferenceVisibility] = useState({});
   const DEBOUNCE_DELAY = 500; // milliseconds
 
   // Define handleRunAIEvaluation with useCallback BEFORE any returns
@@ -618,19 +632,31 @@ const SubmissionDetailView = () => {
                   <FileText size={20} />
                   <span>AI Analysis & Evaluation</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {showSuccessModal && (
-                    <Badge variant="success">
-                      <CheckCircle size={12} className="mr-1" />
-                      Success
-                    </Badge>
+                <div className="flex items-center gap-3">
+                  {analysis && !isAnalyzing && (
+                    <button 
+                      className="btn btn-ghost btn-sm text-maroon font-bold flex items-center gap-2 hover:bg-maroon-50"
+                      onClick={() => handleRunAIEvaluation()}
+                      title="Update AI Analysis with fresh evaluation"
+                    >
+                      <Sparkles size={16} />
+                      <span>Re-analyze</span>
+                    </button>
                   )}
-                  {analysisError && (
-                    <Badge variant="error">
-                      <AlertCircle size={12} className="mr-1" />
-                      Error
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {showSuccessModal && (
+                      <Badge variant="success">
+                        <CheckCircle size={12} className="mr-1" />
+                        Success
+                      </Badge>
+                    )}
+                    {analysisError && (
+                      <Badge variant="error">
+                        <AlertCircle size={12} className="mr-1" />
+                        Error
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             }
@@ -822,26 +848,10 @@ const SubmissionDetailView = () => {
                                   {(index + 1)}
                                 </span>
                                 <h4 className="ai-criterion-name">{item.criterion_name}</h4>
-                                {referencesText && /references|bibliography|works cited/i.test(item.criterion_name || '') && (
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => setReferenceVisibility(prev => ({
-                                      ...prev,
-                                      [index]: !prev[index]
-                                    }))}
-                                  >
-                                    {referenceVisibility[index] ? 'Hide references' : 'See more'}
-                                  </button>
-                                )}
                               </div>
                               <p className="ai-criterion-feedback">
                                 {item.feedback}
                               </p>
-                              {referenceVisibility[index] && referencesText && (
-                                <div className="ai-references-text">
-                                  {referencesText}
-                                </div>
-                              )}
                             </div>
                             <div className="ai-criterion-score">
                               <div className="ai-score-val">{formatScore(item.score)}</div>
@@ -852,6 +862,7 @@ const SubmissionDetailView = () => {
                       </div>
                     </div>
                   )}
+
                 </div>
               )}
             </div>

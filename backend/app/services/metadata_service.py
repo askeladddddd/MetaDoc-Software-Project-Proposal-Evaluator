@@ -135,10 +135,7 @@ class MetadataService:
         Applies unified normalization and cleanup to all document formats.
         """
         # 1. Branch extraction based on file format
-        if str(file_path).lower().endswith('.pdf'):
-            metadata, parsing_error = self._extract_pdf_metadata(file_path, external_metadata)
-        else:
-            metadata, parsing_error = self._extract_docx_internal(file_path, external_metadata)
+        metadata, parsing_error = self._extract_docx_internal(file_path, external_metadata)
 
         # ── 2. UNIFIED NORMALIZATION (Applies to both PDF and DOCX) ──────────────────
         
@@ -525,9 +522,7 @@ class MetadataService:
     
     def extract_document_text(self, file_path):
         """Extract full text content from DOCX or PDF file"""
-        if str(file_path).lower().endswith('.pdf'):
-            return self._extract_pdf_text(file_path)
-            
+
         try:
             doc = Document(file_path)
             
@@ -773,103 +768,4 @@ class MetadataService:
         
         return report
 
-    def _extract_pdf_metadata(self, file_path, external_metadata=None):
-        metadata = {
-            'author': 'Unavailable',
-            'creation_date': None,
-            'last_modified_date': None,
-            'last_editor': 'Unavailable',
-            'file_size': 0,
-            'word_count': 0,
-            'revision_count': 0,
-            'editing_time_minutes': 0,
-            'application': 'Unknown',
-            'image_count': 0,
-            'image_density_warning': False,
-            'contributors': []
-        }
-        parsing_error = None
 
-        try:
-            metadata['file_size'] = os.path.getsize(file_path)
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            meta = reader.metadata
-
-            if meta:
-                if meta.author:
-                    metadata['author'] = meta.author
-                    metadata['contributors'].append({'name': meta.author, 'role': 'Author'})
-                if meta.creator:
-                    metadata['application'] = meta.creator
-                
-                # Basic timestamp parsing for PDF creation/modification dates if available
-                # D:YYYYMMDDHHmmSSOHH'mm' format
-                def parse_pdf_date(date_str):
-                    if not date_str: return None
-                    date_str = str(date_str).replace('D:', '').replace("'", "")
-                    try:
-                        dt = datetime.strptime(date_str[:14], "%Y%m%d%H%M%S")
-                        return dt.isoformat()
-                    except:
-                        return None
-
-                if meta.creation_date:
-                    metadata['creation_date'] = parse_pdf_date(meta.creation_date) or str(meta.creation_date)
-                if meta.modification_date:
-                    metadata['last_modified_date'] = parse_pdf_date(meta.modification_date) or str(meta.modification_date)
-            
-            # Count images in PDF
-            img_count = 0
-            for page in reader.pages:
-                if '/XObject' in page['/Resources']:
-                    xObject = page['/Resources']['/XObject'].get_object()
-                    for obj in xObject:
-                        if xObject[obj]['/Subtype'] == '/Image':
-                            img_count += 1
-            metadata['image_count'] = img_count
-
-        except Exception as e:
-            current_app.logger.error(f"PDF metadata extraction failed: {e}")
-            parsing_error = str(e)
-            metadata['parsing_error'] = parsing_error
-
-        # Deduplicate and merge external metadata
-        if external_metadata:
-            if not metadata['creation_date']:
-                metadata['creation_date'] = external_metadata.get('createdTime')
-            if external_metadata.get('modifiedTime'):
-                metadata['last_modified_date'] = external_metadata.get('modifiedTime')
-            
-            if metadata['author'] == 'Unavailable':
-                owners = external_metadata.get('owners', [])
-                if owners:
-                    metadata['author'] = owners[0].get('displayName') or owners[0].get('emailAddress') or 'Unavailable'
-            
-            if metadata['last_editor'] == 'Unavailable':
-                lmu = external_metadata.get('lastModifyingUser')
-                if lmu:
-                    metadata['last_editor'] = lmu.get('displayName') or lmu.get('emailAddress') or 'Unavailable'
-
-        if not metadata['creation_date']:
-            try: metadata['creation_date'] = datetime.fromtimestamp(os.path.getctime(file_path)).isoformat()
-            except: pass
-        if not metadata['last_modified_date']:
-            try: metadata['last_modified_date'] = datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
-            except: pass
-
-        return metadata, parsing_error
-
-    def _extract_pdf_text(self, file_path):
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            text_parts = []
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    text_parts.append(text)
-            return "\n\f\n".join(text_parts), None
-        except Exception as e:
-            current_app.logger.error(f"PDF text extraction failed: {e}")
-            return None, f"PDF text extraction error: {e}"

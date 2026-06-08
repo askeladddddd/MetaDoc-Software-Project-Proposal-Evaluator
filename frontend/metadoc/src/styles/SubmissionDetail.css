@@ -836,6 +836,26 @@
   overflow: auto;
 }
 
+/* References Section */
+.ai-references-section {
+  border-top: 1px solid #f1f5f9;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+
+.ai-references-expanded-box {
+  animation: fadeIn 0.3s ease-out;
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.ai-references-expanded-box pre {
+  margin: 0;
+  font-family: inherit;
+  color: #475569;
+}
+
 /* Utils */
 @keyframes spin {
   to {

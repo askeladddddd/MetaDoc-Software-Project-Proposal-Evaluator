@@ -945,15 +945,11 @@ class DashboardService:
             current_app.logger.error(f"Unarchive students error: {e}")
             return None, str(e)
 
-    def evaluate_submission(self, submission_id, user_id, rubric_data):
+    def evaluate_submission(self, submission_id, user_id, rubric_data, force=False):
         """
         Perform AI evaluation of a submission using a provided rubric.
         
-        Optimization: If only the rubric name/description changed (but not the criteria),
-        reuse the existing evaluation instead of re-evaluating with AI.
-        
-        Auto-invalidation: If the submitted file has been edited/modified since the last 
-        evaluation, the cache is automatically cleared and a new evaluation is performed.
+        force: If True, bypasses the cache and performs a new AI evaluation.
         """
         try:
             submission = Submission.query.filter_by(
@@ -975,23 +971,14 @@ class DashboardService:
                 # File has been edited after the last evaluation
                 if submission.file_modified_at > analysis.last_evaluation_timestamp:
                     file_modification_detected = True
-                    current_app.logger.info(
-                        f"File modification detected for submission {submission_id}. "
-                        f"File modified at: {submission.file_modified_at}, "
-                        f"Last evaluation: {analysis.last_evaluation_timestamp}. "
-                        f"Clearing cache to trigger re-evaluation."
-                    )
-                    # Invalidate the cache by clearing tracking fields
-                    analysis.last_evaluated_rubric_id = None
-                    analysis.last_evaluated_rubric_criteria_hash = None
-                    analysis.last_evaluation_timestamp = None
             
             # Compute hash of current rubric criteria and prompt message
             current_criteria_hash = compute_rubric_criteria_hash(rubric_data)
             rubric_id = rubric_data.get('id')
             
-            # Check if we can reuse existing evaluation (same rubric criteria and prompt, AND file not modified)
-            if (not file_modification_detected and
+            # Check if we can reuse existing evaluation (unless force is True)
+            if (not force and 
+                not file_modification_detected and
                 analysis.last_evaluated_rubric_id == rubric_id and 
                 analysis.last_evaluated_rubric_criteria_hash == current_criteria_hash and
                 analysis.ai_insights and
@@ -1018,8 +1005,7 @@ class DashboardService:
                 
                 reason_text = " or ".join(reason) if reason else "unknown reason"
                 
-                from app.services.nlp_service import NLPService
-                nlp_service = NLPService()
+                from app.services.agent_service import agent_service
                 
                 context = {
                     'assignment_type': submission.deadline.assignment_type if submission.deadline else 'Project',
@@ -1049,9 +1035,10 @@ class DashboardService:
                     context['image_density_warning'] = analysis.document_metadata.get('image_density_warning', False)
                     context['image_count'] = analysis.document_metadata.get('image_count', 0)
                 
-                evaluation, model_used, error = nlp_service.evaluate_with_rubric(
-                    analysis.document_text,
-                    rubric_data,
+                evaluation, model_used, error = agent_service.evaluate_with_agentic_rag(
+                    document_id=submission_id,
+                    text=analysis.document_text,
+                    rubric=rubric_data,
                     submission_context=context
                 )
                 

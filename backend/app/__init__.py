@@ -123,6 +123,10 @@ def register_blueprints(app):
     # Reports
     from app.api.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
+    
+    # Chatbot (Agentic AI)
+    from app.api.chatbot import chatbot_bp
+    app.register_blueprint(chatbot_bp, url_prefix='/api/v1/chatbot')
 
 def register_error_handlers(app):
     """Register error handlers"""

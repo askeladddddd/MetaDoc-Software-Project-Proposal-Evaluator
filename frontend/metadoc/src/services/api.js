@@ -119,7 +119,7 @@ export const dashboardAPI = {
       timeout: 60000,
     }
   ),
-  runAIEvaluation: (submissionId, rubric) => api.post(`/dashboard/submissions/${submissionId}/evaluate`, { rubric }),
+  runAIEvaluation: (submissionId, rubric) => api.post(`/dashboard/submissions/${submissionId}/evaluate`, { rubric, force: true }),
 };
 
 // Rubric API
@@ -159,6 +159,12 @@ export const reportsAPI = {
   exportCSV: (data) => api.post('/reports/export/csv', data),
   downloadExport: (exportId) => api.get(`/reports/download/${exportId}`, { responseType: 'blob' }),
   getExports: () => api.get('/reports/exports'),
+};
+
+// Chatbot API
+export const chatbotAPI = {
+  sendMessage: (submissionId, message) => api.post(`/chatbot/chat/${submissionId}`, { message }),
+  sendSystemMessage: (message) => api.post('/chatbot/chat', { message }),
 };
 
 export default api;

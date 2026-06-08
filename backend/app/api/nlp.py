@@ -27,7 +27,7 @@ from flask import Blueprint, request, jsonify, current_app
 from app.core.extensions import db
 from app.models import Submission, AnalysisResult
 from app.services.audit_service import AuditService
-from app.services import NLPService
+from app.services import NLPService, agent_service
 
 nlp_bp = Blueprint('nlp', __name__)
 
@@ -70,15 +70,12 @@ def analyze_nlp(submission_id):
         if request.json and 'enable_ai_summary' in request.json:
             enable_ai = request.json.get('enable_ai_summary')
         
-        if enable_ai and get_nlp_service().gemini_initialized:
-            context = {
-                'assignment_type': getattr(submission.deadline, 'assignment_type', None) if submission.deadline else None,
-                'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
-            }
-            
-            ai_summary, model_used, ai_error = get_nlp_service().generate_ai_summary(text, context)
+        if enable_ai:
+            ai_summary_text, ai_error = agent_service.generate_ai_summary(text)
             if ai_error:
                 current_app.logger.warning(f"AI summary failed: {ai_error}")
+            else:
+                ai_summary = {'summary': ai_summary_text}
         
         # Consolidate results
         consolidated_results, consolidation_error = get_nlp_service().consolidate_nlp_results(local_results, ai_summary)
@@ -161,7 +158,7 @@ def generate_rubric_prompt():
         if not rubric_data:
             return jsonify({'error': 'Rubric data required'}), 400
             
-        generated_prompt, error = get_nlp_service().generate_rubric_system_prompt(rubric_data)
+        generated_prompt, error = agent_service.generate_rubric_system_prompt(rubric_data)
         
         if error:
             return jsonify({'error': error}), 500
@@ -179,7 +176,7 @@ def generate_criteria():
         title = data.get('title', 'General Research')
         description = data.get('description', '')
         
-        criteria, error = get_nlp_service().generate_rubric_criteria(title, description)
+        criteria, error = agent_service.generate_rubric_criteria(title, description)
         
         if error:
             return jsonify({'error': error}), 500

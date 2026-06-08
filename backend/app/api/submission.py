@@ -106,6 +106,14 @@ def perform_full_analysis(app, submission_id):
             analysis.is_complete_document = is_complete
             analysis.validation_warnings = warnings
 
+            # 2.1 Index document for RAG/Agentic AI
+            try:
+                from app.services.rag_service import rag_service
+                rag_service.index_document(submission.id, text)
+                app.logger.info(f"Proactively indexed submission {submission.id} for RAG")
+            except Exception as rag_err:
+                app.logger.error(f"Proactive RAG indexing failed for submission {submission.id}: {rag_err}")
+
             # Sync submission's file_modified_at with extracted metadata for better list-view fallback
             if metadata.get('last_modified_date'):
                 new_mod_at = _parse_iso_datetime(metadata['last_modified_date'])

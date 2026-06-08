@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, matchPath } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import ChatbotWindow from '../chatbot/ChatbotWindow';
 import {
   Folder,
   LayoutDashboard,
@@ -538,6 +539,11 @@ const DashboardLayout = ({ children }) => {
           </div>
         </div>
       )}
+      {/* Global AI Assistant */}
+      <ChatbotWindow 
+        submissionId={matchPath('/dashboard/submissions/:id', location.pathname)?.params.id} 
+        fileName={matchPath('/dashboard/submissions/:id', location.pathname) ? 'Current Document' : null}
+      />
     </div>
   );
 };

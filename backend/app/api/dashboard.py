@@ -1266,7 +1266,9 @@ def evaluate_submission(submission_id):
         if not data or 'rubric' not in data:
             return jsonify({'error': 'Rubric data is required'}), 400
             
-        result, error = dashboard_service.evaluate_submission(submission_id, user_id, data['rubric'])
+        force = data.get('force', False)
+            
+        result, error = dashboard_service.evaluate_submission(submission_id, user_id, data['rubric'], force=force)
         
         if error:
             return jsonify({'error': error}), 400
